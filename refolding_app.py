@@ -169,12 +169,11 @@ def save_to_excel(header, df, engine='openpyxl'):
 
         df.to_excel(writer, sheet_name='Data', index=False)
 
+        # Save with workbook object
+        writer.book.save(output)
+
     output.seek(0)
-
-    # Create a new Excel file from the BytesIO object
-    with open('output_from_bytesio.xlsx', 'wb') as f:
-        f.write(output.read())
-
+    return output.read()
 
 
 st.title("Jasco Refolding Monitoring App")
