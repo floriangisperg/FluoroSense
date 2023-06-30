@@ -230,7 +230,7 @@ if uploaded_file:
         #         data=html_bytes,
         #         file_name='stuff.html',
         #         mime='text/html'
-            )
+            # )
     with tab2:
        st.header("Average emission wavelength [nm]")
        fig = plot_data(df_augmented, "Average emission wavelength [nm]")
