@@ -162,17 +162,18 @@ def plot_contour(df, ncontours=15, template=template, width=width, height=height
 def save_to_excel(header, df, engine='openpyxl'):
     output = BytesIO()
 
-    writer = pd.ExcelWriter(output, engine=engine)
+    with pd.ExcelWriter(output, engine=engine) as writer:
+        header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
+        header_df.to_excel(writer, sheet_name='Info')
 
-    header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
-    header_df.to_excel(writer, sheet_name='Info')
+        df.to_excel(writer, sheet_name='Data', index=False)
 
-    df.to_excel(writer, sheet_name='Data', index=False)
-
-    writer.save()
+        # Save with workbook object
+        writer.book.save(output)
 
     output.seek(0)
     return output.read()
+
 
 st.title("Jasco Refolding Monitoring App")
 with st.expander("Upload file here"):
