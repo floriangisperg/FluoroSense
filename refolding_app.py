@@ -220,16 +220,16 @@ if uploaded_file:
         # Show the plot
         st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
-        if fig:
-            buffer = io.StringIO()
-            fig.write_html(buffer, include_plotlyjs='cdn')
-            html_bytes = buffer.getvalue().encode()
+        # if fig:
+        #     buffer = io.StringIO()
+        #     fig.write_html(buffer, include_plotlyjs='cdn')
+        #     html_bytes = buffer.getvalue().encode()
 
-            st.download_button(
-                label='Download HTML',
-                data=html_bytes,
-                file_name='stuff.html',
-                mime='text/html'
+        #     st.download_button(
+        #         label='Download HTML',
+        #         data=html_bytes,
+        #         file_name='stuff.html',
+        #         mime='text/html'
             )
     with tab2:
        st.header("Average emission wavelength [nm]")
