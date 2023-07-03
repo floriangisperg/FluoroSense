@@ -166,7 +166,7 @@ def plot_contour(df, ncontours=15, template=template, width=width, height=height
     #fig.show(config=config)
     return fig
 @st.cache_data
-def save_to_excel(header, df, engine='openpyxl'):
+def save_to_excel(header, df, engine='xlsxwriter'):
     output = BytesIO()
 
     writer = pd.ExcelWriter(output, engine=engine)
