@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 import io
+from io import StringIO
 from io import BytesIO
 
 # plot settings:
@@ -33,7 +34,7 @@ config = {'displaylogo': False,
                                     'eraseshape'
                                        ],
           'displayModeBar': True}
-
+@st.cache_data
 def upload_jasco_rawdata(uploaded_file):
     header = {}
     xydata = []
@@ -87,6 +88,9 @@ def augment_dataframe(df, avg_emission_wavelength, integrals):
     df_transposed_aew_integral["Process Time [min]"] = np.arange(0, df_transposed_aew_integral.shape[0] , 1)
     df_transposed_aew_integral["Process Time [h]"] = round(df_transposed_aew_integral["Process Time [min]"] / 60, 3)
     return df_transposed, df_transposed_aew_integral
+
+
+@st.cache_data
 def plot_data(df, y_column, template=template, width=width, height=height, config=config):
     """
 
@@ -134,10 +138,11 @@ def plot_intensity(df, interval=None, template=template, width=width, height=hei
 
     # fig.show(config=config)
     return fig
+@st.cache_data
 def plot_contour(df, ncontours=15, template=template, width=width, height=height, config=config):
     Z = df.to_numpy()
     X = np.array(df.columns, dtype=float)
-    Y = np.array(df.index, dtype=int)
+    Y = np.array(df.index, dtype=float)
 
     fig = go.Figure(data =
         go.Contour(
@@ -147,6 +152,7 @@ def plot_contour(df, ncontours=15, template=template, width=width, height=height
             colorscale='Viridis',
             hovertemplate='Wavelength [nm]: %{x}<br>Time: %{y}<br>Intensity: %{z}<extra></extra>',
             ncontours=ncontours,
+            colorbar=dict(title="Intensity")  # here is how to add the color bar title
         ))
 
     fig.update_layout(
@@ -159,22 +165,28 @@ def plot_contour(df, ncontours=15, template=template, width=width, height=height
 
     #fig.show(config=config)
     return fig
-         
+@st.cache_data
 def save_to_excel(header, df, engine='openpyxl'):
     output = BytesIO()
 
-    with pd.ExcelWriter(output, engine=engine) as writer:
-        header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
-        header_df.to_excel(writer, sheet_name='Info')
+    writer = pd.ExcelWriter(output, engine=engine)
 
-        df.to_excel(writer, sheet_name='Data', index=False)
+    header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
+    header_df.to_excel(writer, sheet_name='Info')
 
-        # Save with workbook object
-        writer.book.save(output)
+    df.to_excel(writer, sheet_name='Data', index=False)
+
+    writer.save()
 
     output.seek(0)
     return output.read()
 
+@st.cache_data
+def df_to_txt(df, y_column):
+    df_subset = df[["Process Time [h]", y_column]]
+    str_io = StringIO()
+    df_subset.to_csv(str_io, sep='\t', index=False)
+    return str_io.getvalue()
 
 st.title("Jasco Refolding Monitoring App")
 with st.expander("Upload file here"):
@@ -192,7 +204,7 @@ if uploaded_file:
     avg_emission_wavelength = calculate_avg_emission_wavelength(df)
     df_transposed, df_augmented = augment_dataframe(df, avg_emission_wavelength, integrals)
 
-    # download button
+    # download buttons
     excel_data = save_to_excel(header, df_augmented)
     st.sidebar.download_button(
         label="Download processed Data as Excel-File",
@@ -200,6 +212,21 @@ if uploaded_file:
         file_name = header["TITLE"] + ".xlsx",
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
+    aew_df_txt = df_to_txt(df_augmented, "Average emission wavelength [nm]")
+    st.sidebar.download_button(
+        label="AEW as .txt",
+        data= aew_df_txt,
+        file_name= header["TITLE"] + "_aew" + ".txt",
+        mime='text/csv',
+    )
+    intensity_df_txt = df_to_txt(df_augmented, "Integral")
+    st.sidebar.download_button(
+        label="Intensity as .txt",
+        data=intensity_df_txt,
+        file_name=header["TITLE"] + "_intensity" + ".txt",
+        mime='text/csv',
+    )
+
     # # Convert the dictionary to a Pandas DataFrame
     # # Create the sidebar with the DataFrame
     if header:
@@ -222,17 +249,17 @@ if uploaded_file:
         # Show the plot
         st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
-        # if fig:
-        #     buffer = io.StringIO()
-        #     fig.write_html(buffer, include_plotlyjs='cdn')
-        #     html_bytes = buffer.getvalue().encode()
+        if fig:
+            buffer = io.StringIO()
+            fig.write_html(buffer, include_plotlyjs='cdn')
+            html_bytes = buffer.getvalue().encode()
 
-        #     st.download_button(
-        #         label='Download HTML',
-        #         data=html_bytes,
-        #         file_name='stuff.html',
-        #         mime='text/html'
-            # )
+            st.download_button(
+                label='Download HTML',
+                data=html_bytes,
+                file_name='stuff.html',
+                mime='text/html'
+            )
     with tab2:
        st.header("Average emission wavelength [nm]")
        fig = plot_data(df_augmented, "Average emission wavelength [nm]")
@@ -245,6 +272,6 @@ if uploaded_file:
 
     with tab4:
        st.header("Contour plot")
-       fig = plot_contour(df_transposed, ncontours=15)
+       fig = plot_contour(df_transposed) #ncontours=15)
        st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
