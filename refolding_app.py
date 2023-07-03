@@ -175,6 +175,9 @@ def save_to_excel(header, df, engine='xlsxwriter'):
     # Create a BytesIO buffer
     output = BytesIO()
     
+    # Create a Workbook object
+    workbook = Workbook()
+    
     # Create a Pandas ExcelWriter using the buffer and the specified engine
     with pd.ExcelWriter(output, engine=engine) as writer:
         # Write each dataframe to a different worksheet
@@ -182,13 +185,14 @@ def save_to_excel(header, df, engine='xlsxwriter'):
         header_df.to_excel(writer, sheet_name='Info')
 
         # Save the workbook to the buffer
-        writer.save()
+        workbook.save(output)
     
     # Reset the buffer position to the beginning
     output.seek(0)
     
     # Return the contents of the buffer
     return output.getvalue()
+
 
 
 @st.cache_data
