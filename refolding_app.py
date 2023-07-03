@@ -170,27 +170,25 @@ def plot_contour(df, ncontours=15, template=template, width=width, height=height
     return fig
 @st.cache_data
 def save_to_excel(header, df, engine='xlsxwriter'):
-    # output = BytesIO()
-    #
-    # workbook = Workbook()
-    # writer = pd.ExcelWriter(output, engine=engine)
-    #
-    # header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
-    # header_df.to_excel(writer, sheet_name='Info')
-    #
-    # df.to_excel(writer, sheet_name='Data', index=False)
-    # writer.save()
-    # output.seek(0)
-    # return data
     header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
-    with pd.ExcelWriter(buffer, engine=engine) as writer:
-        # Write each dataframe to a different worksheet.
+    
+    # Create a BytesIO buffer
+    output = BytesIO()
+    
+    # Create a Pandas ExcelWriter using the buffer and the specified engine
+    with pd.ExcelWriter(output, engine=engine) as writer:
+        # Write each dataframe to a different worksheet
         df.to_excel(writer, sheet_name='Data', index=False)
         header_df.to_excel(writer, sheet_name='Info')
 
-        # Close the Pandas Excel writer and output the Excel file to the buffer
-         save_workbook(writer, output)
-
+        # Save the workbook to the buffer
+        writer.save()
+    
+    # Reset the buffer position to the beginning
+    output.seek(0)
+    
+    # Return the contents of the buffer
+    return output.getvalue()
 
 
 @st.cache_data
