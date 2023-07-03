@@ -7,6 +7,8 @@ import plotly.express as px
 import io
 from io import StringIO
 from io import BytesIO
+from openpyxl import Workbook
+from tempfile import NamedTemporaryFile
 
 # plot settings:
 width = 1250
@@ -167,19 +169,28 @@ def plot_contour(df, ncontours=15, template=template, width=width, height=height
     return fig
 @st.cache_data
 def save_to_excel(header, df, engine='xlsxwriter'):
-    output = BytesIO()
-
-    writer = pd.ExcelWriter(output, engine=engine)
-
+    # output = BytesIO()
+    #
+    # workbook = Workbook()
+    # writer = pd.ExcelWriter(output, engine=engine)
+    #
+    # header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
+    # header_df.to_excel(writer, sheet_name='Info')
+    #
+    # df.to_excel(writer, sheet_name='Data', index=False)
+    # writer.save()
+    # output.seek(0)
+    # return data
     header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
-    header_df.to_excel(writer, sheet_name='Info')
+    with pd.ExcelWriter(buffer, engine=engine) as writer:
+        # Write each dataframe to a different worksheet.
+        df.to_excel(writer, sheet_name='Data', index=False)
+        header_df.to_excel(writer, sheet_name='Info')
 
-    df.to_excel(writer, sheet_name='Data', index=False)
+        # Close the Pandas Excel writer and output the Excel file to the buffer
+        writer.save()
 
-    writer.save()
 
-    output.seek(0)
-    return output.read()
 
 @st.cache_data
 def df_to_txt(df, y_column):
@@ -205,12 +216,13 @@ if uploaded_file:
     df_transposed, df_augmented = augment_dataframe(df, avg_emission_wavelength, integrals)
 
     # download buttons
+    buffer = io.BytesIO()
     excel_data = save_to_excel(header, df_augmented)
     st.sidebar.download_button(
         label="Download processed Data as Excel-File",
-        data=excel_data,
-        file_name = header["TITLE"] + ".xlsx",
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        data=buffer,
+        file_name = header["TITLE"] + "_processed" + ".xlsx",
+        mime="application/vnd.ms-excel",
     )
     aew_df_txt = df_to_txt(df_augmented, "Average emission wavelength [nm]")
     st.sidebar.download_button(
@@ -249,17 +261,17 @@ if uploaded_file:
         # Show the plot
         st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
-        if fig:
-            buffer = io.StringIO()
-            fig.write_html(buffer, include_plotlyjs='cdn')
-            html_bytes = buffer.getvalue().encode()
-
-            st.download_button(
-                label='Download HTML',
-                data=html_bytes,
-                file_name='stuff.html',
-                mime='text/html'
-            )
+        # if fig:
+        #     buffer = io.StringIO()
+        #     fig.write_html(buffer, include_plotlyjs='cdn')
+        #     html_bytes = buffer.getvalue().encode()
+        #
+        #     st.download_button(
+        #         label='Download HTML',
+        #         data=html_bytes,
+        #         file_name='stuff.html',
+        #         mime='text/html'
+        #     )
     with tab2:
        st.header("Average emission wavelength [nm]")
        fig = plot_data(df_augmented, "Average emission wavelength [nm]")
