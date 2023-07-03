@@ -8,6 +8,7 @@ import io
 from io import StringIO
 from io import BytesIO
 from openpyxl import Workbook
+from openpyxl.writer.excel import save_workbook
 from tempfile import NamedTemporaryFile
 
 # plot settings:
@@ -188,7 +189,7 @@ def save_to_excel(header, df, engine='xlsxwriter'):
         header_df.to_excel(writer, sheet_name='Info')
 
         # Close the Pandas Excel writer and output the Excel file to the buffer
-        writer.save()
+         save_workbook(writer, output)
 
 
 
