@@ -171,28 +171,21 @@ def plot_contour(df, ncontours=15, template=template, width=width, height=height
 @st.cache_data
 def save_to_excel(header, df, engine='xlsxwriter'):
     header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
-    
+
     # Create a BytesIO buffer
     output = BytesIO()
-    
-    # Create a Workbook object
-    workbook = Workbook()
-    
+
     # Create a Pandas ExcelWriter using the buffer and the specified engine
     with pd.ExcelWriter(output, engine=engine) as writer:
         # Write each dataframe to a different worksheet
         df.to_excel(writer, sheet_name='Data', index=False)
         header_df.to_excel(writer, sheet_name='Info')
 
-        # Save the workbook to the buffer
-        workbook.save(output)
-    
     # Reset the buffer position to the beginning
     output.seek(0)
-    
+
     # Return the contents of the buffer
     return output.getvalue()
-
 
 
 @st.cache_data
@@ -219,14 +212,13 @@ if uploaded_file:
     df_transposed, df_augmented = augment_dataframe(df, avg_emission_wavelength, integrals)
 
     # download buttons
-    buffer = io.BytesIO()
     excel_data = save_to_excel(header, df_augmented)
     st.sidebar.download_button(
-        label="Download processed Data as Excel-File",
-        data=buffer,
-        file_name = header["TITLE"] + "_processed" + ".xlsx",
-        mime="application/vnd.ms-excel",
-    )
+    label="Download processed Data as Excel-File",
+    data=excel_data,
+    file_name=header["TITLE"] + "_processed" + ".xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+         
     aew_df_txt = df_to_txt(df_augmented, "Average emission wavelength [nm]")
     st.sidebar.download_button(
         label="AEW as .txt",
