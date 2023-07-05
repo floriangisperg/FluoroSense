@@ -88,9 +88,11 @@ def augment_dataframe(df, avg_emission_wavelength, integrals):
     df_transposed_aew["Average emission wavelength [nm]"] = avg_emission_wavelength
     df_transposed_aew_integral = df_transposed_aew.copy()
     df_transposed_aew_integral["Integral"] = integrals
-    df_transposed_aew_integral["Process Time [min]"] = np.arange(0, df_transposed_aew_integral.shape[0] , 1)
+    df_transposed_aew_integral.reset_index(inplace = True)
+    df_transposed_aew_integral.rename(columns={df_transposed_aew_integral.columns[0]: "Process Time [min]"}, inplace=True)
+    df_transposed_aew_integral["Process Time [min]"] = pd.to_numeric(df_transposed_aew_integral["Process Time [min]"], errors='coerce')
     df_transposed_aew_integral["Process Time [h]"] = round(df_transposed_aew_integral["Process Time [min]"] / 60, 3)
-    return df_transposed, df_transposed_aew_integral
+    return df_transposed, df_transposed_aew_integral 
 
 
 @st.cache_data
