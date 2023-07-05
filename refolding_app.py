@@ -47,7 +47,7 @@ def upload_jasco_rawdata(uploaded_file):
     mode = 'header'
     for line in lines:
         line = line.decode().strip() # decode byte stream to string
-        if line == 'XYDATA':
+        if line.startswith('XYDATA'):
             mode = 'data'
             continue
         if line == '##### Extended Information':
@@ -55,7 +55,7 @@ def upload_jasco_rawdata(uploaded_file):
             continue
         if mode == 'header':
             key, value = line.split(',', 1)
-            header[key] = value.strip()
+            header[key] = value.rstrip(',')
         elif mode == 'data':
             if not line.startswith('#####'):
                 fields = line.split(',')
