@@ -99,7 +99,7 @@ def plot_data(df, y_column, template=template, width=width, height=height, confi
 
     :rtype: object
     """
-    fig = px.line(df, x="Process Time [h]", y=y_column, template=template)
+    fig = px.scatter(df, x="Process Time [h]", y=y_column, template=template)
     fig.update_layout(autosize=False, width=width, height=height)
     # fig.show(config=config)
     return fig
