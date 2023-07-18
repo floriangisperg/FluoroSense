@@ -1,5 +1,4 @@
 from pages.Refolding_Analysis import upload_jasco_rawdata
-from pages.Refolding_Analysis import calculate_avg_emission_wavelength
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
@@ -33,7 +32,6 @@ config = {'displaylogo': False,
                                        ],
           'displayModeBar': True}
 
-# Your existing dataframe to .txt file conversion function
 def single_measurement_df_to_txt(df, header, suffix=''):
     csv = df.to_csv(sep='\t', index=False).encode('utf-8')
     return csv
@@ -48,6 +46,11 @@ def convert_df_to_txt(df, header):
     txt = single_measurement_df_to_txt(df, header)
     return txt.encode('utf-8')  # Encode as byte stream for download
 
+def calculate_avg_emission_wavelength(df):
+    weighted_sum = np.sum(df["Wavelength [nm]"] * df["Intensity"])
+    total_intensity = np.sum(df["Intensity"])
+    avg_emission_wavelength = weighted_sum / total_intensity
+    return avg_emission_wavelength
 
 def download_data(data_headers_and_dfs, suffix=''):
     for header, df, extended_info in data_headers_and_dfs:
@@ -59,10 +62,23 @@ def download_data(data_headers_and_dfs, suffix=''):
             mime='text/plain',
         )
 
+
 def normalize(df):
     scaler = MinMaxScaler()
-    df_normalized = pd.DataFrame(scaler.fit_transform(df), columns=df.columns, index=df.index)
+
+    # Select the columns to scale
+    cols_to_scale = df.columns.difference(['Wavelength [nm]'])
+
+    # Scale those columns
+    scaled_cols = pd.DataFrame(scaler.fit_transform(df[cols_to_scale]),
+                               columns=cols_to_scale,
+                               index=df.index)
+
+    # Concatenate the scaled columns with the ones that weren't scaled
+    df_normalized = pd.concat([df['Wavelength [nm]'], scaled_cols], axis=1)
+
     return df_normalized
+
 
 def plot_data(data_headers_and_dfs, template=template, width=width, height=height, config=config):
     fig = go.Figure()
@@ -70,7 +86,7 @@ def plot_data(data_headers_and_dfs, template=template, width=width, height=heigh
     for i, (header, df, extended_info) in enumerate(data_headers_and_dfs):
         fig.add_trace(
             go.Scatter(
-                x=df.index,
+                x=df["Wavelength [nm]"],
                 y=df["Intensity"],
                 name=header['TITLE'],
                 customdata=np.tile(header['TITLE'], len(df.index)),
@@ -86,7 +102,7 @@ def plot_data(data_headers_and_dfs, template=template, width=width, height=heigh
         template=template,
         xaxis_title="Wavelength [nm]",
         yaxis_title="Intensity",
-        legend_title="Title"
+        legend_title="Experiment"
     )
 
     st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
@@ -101,7 +117,7 @@ def main():
         if len(titles) != len(set(titles)):
             st.warning("Duplicate files detected. Please upload only unique files.")
         else:
-            tab1, tab2, tab3 = st.tabs(["Data Visualization", "Average Emission Wavelength", "Normalized Data"])
+            tab1, tab2, tab3 = st.tabs(["Raw Data Visualization", "Average Emission Wavelength", "Normalized Data"])
 
             with tab1:
                 #st.write("Dataframes loaded successfully. Ready for visualization.")
@@ -110,12 +126,12 @@ def main():
                 download_data(data_headers_and_dfs)
 
             with tab2:
-                avg_emission_wavelength = [(header['TITLE'], calculate_avg_emission_wavelength(df)[1]) for
+                avg_emission_wavelength = [(header['TITLE'], calculate_avg_emission_wavelength(df)) for
                                            header, df, extended_info in data_headers_and_dfs]
                 avg_emission_df = pd.DataFrame(avg_emission_wavelength,
                                                columns=["Title", "Average Emission Wavelength"])
 
-                st.dataframe(avg_emission_df)
+                st.dataframe(avg_emission_df, use_container_width=True)
                 avg_emission_csv = avg_emission_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="Download average emission wavelengths as CSV",
@@ -123,6 +139,33 @@ def main():
                     file_name='avg_emission.csv',
                     mime='text/csv',
                 )
+
+                # Calculate min and max values with some padding
+                y_min = avg_emission_df['Average Emission Wavelength'].min() * 0.975
+                y_max = avg_emission_df['Average Emission Wavelength'].max() * 1.025
+
+                fig = go.Figure(data=[
+                    go.Bar(
+                        name='Average Emission Wavelength',
+                        x=avg_emission_df['Title'],
+                        y=avg_emission_df['Average Emission Wavelength'],
+                        hovertemplate=
+                        '<b>Title:</b> %{x}<br>' +
+                        '<b>Average Emission Wavelength:</b> %{y}<extra></extra>',
+                    )
+                ])
+
+                fig.update_layout(
+                    width=width,
+                    height=height,
+                    template=template,
+                    xaxis_title="Experiment",
+                    yaxis_title="Average Emission Wavelength",
+                    legend_title="Measurement",
+                    yaxis_range=[y_min, y_max]  # Use calculated min and max values
+                )
+
+                st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
             with tab3:
                 data_headers_and_dfs_normalized = [(header, normalize(df), extended_info) for header, df, extended_info
