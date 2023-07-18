@@ -31,11 +31,11 @@ config = {'displaylogo': False,
                                     'eraseshape'
                                        ],
           'displayModeBar': True}
-
+@st.cache_data
 def single_measurement_df_to_txt(df, header, suffix=''):
     csv = df.to_csv(sep='\t', index=False).encode('utf-8')
     return csv
-
+@st.cache_data
 def file_uploader():
     uploaded_files = st.sidebar.file_uploader("Choose CSV files", accept_multiple_files=True)
     data_headers_and_dfs = [upload_jasco_rawdata(file) for file in uploaded_files]
@@ -45,13 +45,13 @@ def file_uploader():
 def convert_df_to_txt(df, header):
     txt = single_measurement_df_to_txt(df, header)
     return txt.encode('utf-8')  # Encode as byte stream for download
-
+@st.cache_data
 def calculate_avg_emission_wavelength(df):
     weighted_sum = np.sum(df["Wavelength [nm]"] * df["Intensity"])
     total_intensity = np.sum(df["Intensity"])
     avg_emission_wavelength = weighted_sum / total_intensity
     return avg_emission_wavelength
-
+@st.cache_data
 def download_data(data_headers_and_dfs, suffix=''):
     for header, df, extended_info in data_headers_and_dfs:
         csv = single_measurement_df_to_txt(df, header, suffix)
@@ -62,7 +62,7 @@ def download_data(data_headers_and_dfs, suffix=''):
             mime='text/plain',
         )
 
-
+@st.cache_data
 def normalize(df):
     scaler = MinMaxScaler()
 
@@ -79,7 +79,7 @@ def normalize(df):
 
     return df_normalized
 
-
+@st.cache_data
 def plot_data(data_headers_and_dfs, template=template, width=width, height=height, config=config):
     fig = go.Figure()
 
@@ -107,7 +107,7 @@ def plot_data(data_headers_and_dfs, template=template, width=width, height=heigh
 
     st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
-
+@st.cache_data
 def main():
     data_headers_and_dfs = file_uploader()
 
