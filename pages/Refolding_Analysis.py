@@ -67,12 +67,20 @@ def upload_jasco_rawdata(uploaded_file):
                 key, value = line.split(',', 1)
                 extended_info[key.strip()] = value.strip()
 
-    df = pd.DataFrame(xydata[1:], columns=xydata[0])
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    df.set_index('', inplace=True)
+    if xydata:
+        df = pd.DataFrame(xydata[1:], columns=xydata[0])
+        for col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        try:
+            df.set_index('', inplace=True)
+        except:
+            df = df.iloc[:-1]
+            df.columns = ["Wavelength [nm]", "Intensity"]
+    else:
+        df = pd.DataFrame()
 
     return header, df, extended_info
+         
 def calculate_integrals(df):
     return df.apply(lambda col: np.trapz(col, dx=1), axis=0)
 def calculate_avg_emission_wavelength(df):
