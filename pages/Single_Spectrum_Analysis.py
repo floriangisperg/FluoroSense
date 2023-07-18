@@ -31,11 +31,11 @@ config = {'displaylogo': False,
                                     'eraseshape'
                                        ],
           'displayModeBar': True}
-@st.cache_data
+
 def single_measurement_df_to_txt(df, header, suffix=''):
     csv = df.to_csv(sep='\t', index=False).encode('utf-8')
     return csv
-@st.cache_data
+
 def file_uploader():
     uploaded_files = st.sidebar.file_uploader("Choose CSV files", accept_multiple_files=True)
     data_headers_and_dfs = [upload_jasco_rawdata(file) for file in uploaded_files]
@@ -107,7 +107,6 @@ def plot_data(data_headers_and_dfs, template=template, width=width, height=heigh
 
     st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
-@st.cache_data
 def main():
     data_headers_and_dfs = file_uploader()
 
