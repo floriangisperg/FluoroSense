@@ -1,5 +1,6 @@
 from pages.Refolding_Analysis import upload_jasco_rawdata
 import streamlit as st
+st.set_page_config(layout="wide")
 import plotly.graph_objects as go
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
