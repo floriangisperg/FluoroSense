@@ -126,85 +126,82 @@ def main():
                 #st.write("Visualization complete. Ready for download.")
                 download_data(data_headers_and_dfs)
 
-            with tab2:
-                avg_emission_wavelength = [(header['TITLE'], calculate_avg_emission_wavelength(df)) for
-                                           header, df, extended_info in data_headers_and_dfs]
-                avg_emission_df = pd.DataFrame(avg_emission_wavelength,
-                                               columns=["Title", "Average Emission Wavelength"])
-
-                st.dataframe(avg_emission_df, use_container_width=True)
-                avg_emission_csv = avg_emission_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Download average emission wavelengths as CSV",
-                    data=avg_emission_csv,
-                    file_name='avg_emission.csv',
-                    mime='text/csv',
-                )
-
-                # Calculate min and max values with some padding
-                y_min = avg_emission_df['Average Emission Wavelength'].min() * 0.975
-                y_max = avg_emission_df['Average Emission Wavelength'].max() * 1.025
-
-                fig = go.Figure(data=[
-                    go.Bar(
-                        name='Average Emission Wavelength',
-                        x=avg_emission_df['Title'],
-                        y=avg_emission_df['Average Emission Wavelength'],
-                        hovertemplate=
-                        '<b>Title:</b> %{x}<br>' +
-                        '<b>Average Emission Wavelength:</b> %{y}<extra></extra>',
-                    )
-                ])
-
-                fig.update_layout(
-                    width=width,
-                    height=height,
-                    template=template,
-                    xaxis_title="Experiment",
-                    yaxis_title="Average Emission Wavelength",
-                    legend_title="Measurement",
-                    yaxis_range=[y_min, y_max]  # Use calculated min and max values
-                )
-
-                st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
-
-
+             with tab2:
+                 avg_emission_wavelength = [(header['TITLE'], calculate_avg_emission_wavelength(df)) for header, df, extended_info in data_headers_and_dfs]
+                 avg_emission_df = pd.DataFrame(avg_emission_wavelength, columns=["Title", "Average Emission Wavelength"])
          
-         with tab3:
-             integrals = [(header['TITLE'], calculate_integral(df)) for header, df, extended_info in data_headers_and_dfs]
-             integrals_df = pd.DataFrame(integrals, columns=["Title", "Integral"])
-         
-             st.dataframe(integrals_df, use_container_width=True)
-             integrals_csv = integrals_df.to_csv(index=False).encode('utf-8')
-             st.download_button(
-                 label="Download integrals as CSV",
-                 data=integrals_csv,
-                 file_name='integrals.csv',
-                 mime='text/csv',
-             )
-         
-             fig = go.Figure(data=[
-                 go.Bar(
-                     name='Integral',
-                     x=integrals_df['Title'],
-                     y=integrals_df['Integral'],
-                     hovertemplate=
-                     '<b>Title:</b> %{x}<br>' +
-                     '<b>Integral:</b> %{y}<extra></extra>',
+                 st.dataframe(avg_emission_df, use_container_width=True)
+                 avg_emission_csv = avg_emission_df.to_csv(index=False).encode('utf-8')
+                 st.download_button(
+                     label="Download average emission wavelengths as CSV",
+                     data=avg_emission_csv,
+                     file_name='avg_emission.csv',
+                     mime='text/csv',
                  )
-             ])
          
-             fig.update_layout(
-                 width=width,
-                 height=height,
-                 template=template,
-                 xaxis_title="Experiment",
-                 yaxis_title="Integral",
-                 legend_title="Measurement",
-             )
+                 # Calculate min and max values with some padding
+                 y_min = avg_emission_df['Average Emission Wavelength'].min() * 0.975
+                 y_max = avg_emission_df['Average Emission Wavelength'].max() * 1.025
          
-             st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
-                 
+                 fig = go.Figure(data=[
+                     go.Bar(
+                         name='Average Emission Wavelength',
+                         x=avg_emission_df['Title'],
+                         y=avg_emission_df['Average Emission Wavelength'],
+                         hovertemplate=
+                         '<b>Title:</b> %{x}<br>' +
+                         '<b>Average Emission Wavelength:</b> %{y}<extra></extra>',
+                     )
+                 ])
+         
+                 fig.update_layout(
+                     width=width,
+                     height=height,
+                     template=template,
+                     xaxis_title="Experiment",
+                     yaxis_title="Average Emission Wavelength",
+                     legend_title="Measurement",
+                     yaxis_range=[y_min, y_max]  # Use calculated min and max values
+                 )
+         
+                 st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+         
+             with tab3:
+                 integrals = [(header['TITLE'], calculate_integral(df)) for header, df, extended_info in data_headers_and_dfs]
+                 integrals_df = pd.DataFrame(integrals, columns=["Title", "Integral"])
+         
+                 st.dataframe(integrals_df, use_container_width=True)
+                 integrals_csv = integrals_df.to_csv(index=False).encode('utf-8')
+                 st.download_button(
+                     label="Download integrals as CSV",
+                     data=integrals_csv,
+                     file_name='integrals.csv',
+                     mime='text/csv',
+                 )
+         
+                 fig = go.Figure(data=[
+                     go.Bar(
+                         name='Integral',
+                         x=integrals_df['Title'],
+                         y=integrals_df['Integral'],
+                         hovertemplate=
+                         '<b>Title:</b> %{x}<br>' +
+                         '<b>Integral:</b> %{y}<extra></extra>',
+                     )
+                 ])
+         
+                 fig.update_layout(
+                     width=width,
+                     height=height,
+                     template=template,
+                     xaxis_title="Experiment",
+                     yaxis_title="Integral",
+                     legend_title="Measurement",
+                 )
+         
+                 st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+
+
             with tab4:
                 data_headers_and_dfs_normalized = [(header, normalize(df), extended_info) for header, df, extended_info
                                                    in data_headers_and_dfs]
