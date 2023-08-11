@@ -170,40 +170,40 @@ def main():
 
 
          
-                  with tab3:
-                      integrals = [(header['TITLE'], calculate_integral(df)) for header, df, extended_info in data_headers_and_dfs]
-                      integrals_df = pd.DataFrame(integrals, columns=["Title", "Integral"])
-                  
-                      st.dataframe(integrals_df, use_container_width=True)
-                      integrals_csv = integrals_df.to_csv(index=False).encode('utf-8')
-                      st.download_button(
-                          label="Download integrals as CSV",
-                          data=integrals_csv,
-                          file_name='integrals.csv',
-                          mime='text/csv',
-                      )
-                  
-                      fig = go.Figure(data=[
-                          go.Bar(
-                              name='Integral',
-                              x=integrals_df['Title'],
-                              y=integrals_df['Integral'],
-                              hovertemplate=
-                              '<b>Title:</b> %{x}<br>' +
-                              '<b>Integral:</b> %{y}<extra></extra>',
-                          )
-                      ])
-                  
-                      fig.update_layout(
-                          width=width,
-                          height=height,
-                          template=template,
-                          xaxis_title="Experiment",
-                          yaxis_title="Integral",
-                          legend_title="Measurement",
-                      )
-                  
-                      st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+         with tab3:
+             integrals = [(header['TITLE'], calculate_integral(df)) for header, df, extended_info in data_headers_and_dfs]
+             integrals_df = pd.DataFrame(integrals, columns=["Title", "Integral"])
+         
+             st.dataframe(integrals_df, use_container_width=True)
+             integrals_csv = integrals_df.to_csv(index=False).encode('utf-8')
+             st.download_button(
+                 label="Download integrals as CSV",
+                 data=integrals_csv,
+                 file_name='integrals.csv',
+                 mime='text/csv',
+             )
+         
+             fig = go.Figure(data=[
+                 go.Bar(
+                     name='Integral',
+                     x=integrals_df['Title'],
+                     y=integrals_df['Integral'],
+                     hovertemplate=
+                     '<b>Title:</b> %{x}<br>' +
+                     '<b>Integral:</b> %{y}<extra></extra>',
+                 )
+             ])
+         
+             fig.update_layout(
+                 width=width,
+                 height=height,
+                 template=template,
+                 xaxis_title="Experiment",
+                 yaxis_title="Integral",
+                 legend_title="Measurement",
+             )
+         
+             st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
                  
             with tab4:
                 data_headers_and_dfs_normalized = [(header, normalize(df), extended_info) for header, df, extended_info
