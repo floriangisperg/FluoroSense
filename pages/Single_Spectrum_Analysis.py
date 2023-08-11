@@ -126,7 +126,7 @@ def main():
                 #st.write("Visualization complete. Ready for download.")
                 download_data(data_headers_and_dfs)
 
-             with tab2:
+            with tab2:
                  avg_emission_wavelength = [(header['TITLE'], calculate_avg_emission_wavelength(df)) for header, df, extended_info in data_headers_and_dfs]
                  avg_emission_df = pd.DataFrame(avg_emission_wavelength, columns=["Title", "Average Emission Wavelength"])
          
@@ -166,7 +166,7 @@ def main():
          
                  st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
          
-             with tab3:
+            with tab3:
                  integrals = [(header['TITLE'], calculate_integral(df)) for header, df, extended_info in data_headers_and_dfs]
                  integrals_df = pd.DataFrame(integrals, columns=["Title", "Integral"])
          
