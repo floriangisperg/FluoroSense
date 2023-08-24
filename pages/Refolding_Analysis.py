@@ -98,12 +98,13 @@ def calculate_max_emission_wavelength(df):
         max_emission_wavelength.append(max_wavelength)
     return max_emission_wavelength
 
-def augment_dataframe(df, avg_emission_wavelength, integrals):
+def augment_dataframe(df, avg_emission_wavelength, integrals, max_emission_wavelength):
     df_transposed = df.transpose()
     df_transposed_aew = df_transposed.copy()
     df_transposed_aew["Average emission wavelength [nm]"] = avg_emission_wavelength
     df_transposed_aew_integral = df_transposed_aew.copy()
     df_transposed_aew_integral["Integral"] = integrals
+    df_transposed_aew_integral["Max emission wavelength [nm]"] = max_emission_wavelength     
     df_transposed_aew_integral.reset_index(inplace = True)
     df_transposed_aew_integral.rename(columns={df_transposed_aew_integral.columns[0]: "Process Time [min]"}, inplace=True)
     df_transposed_aew_integral["Process Time [min]"] = pd.to_numeric(df_transposed_aew_integral["Process Time [min]"], errors='coerce')
@@ -227,10 +228,8 @@ if uploaded_file:
 
     integrals = calculate_integrals(df)
     avg_emission_wavelength = calculate_avg_emission_wavelength(df)
-    df_transposed, df_augmented = augment_dataframe(df, avg_emission_wavelength, integrals)
     max_emission_wavelength = calculate_max_emission_wavelength(df)
-    df_augmented["Max emission wavelength [nm]"] = max_emission_wavelength
-
+    df_transposed, df_augmented = augment_dataframe(df, avg_emission_wavelength, integrals, max_emission_wavelength)
 
     # download buttons
     excel_data = save_to_excel(header, df_augmented)
