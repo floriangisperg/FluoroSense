@@ -28,7 +28,7 @@ config = {'displaylogo': False,
                 'width': download_width,
                 'scale': download_text_scale }, # Multiply title/legend/axis/canvas sizes by this factor
            'modeBarButtonsToAdd': ['hoverclosest', 'hovercompare', 'togglehover', 'togglespikelines',
-                                    'v1hovermode'
+                                    'v1hovermode',
                                     'drawline',
                                     'drawopenpath',
                                     'drawclosedpath',
@@ -90,6 +90,14 @@ def calculate_avg_emission_wavelength(df):
         total_intensity = np.sum(df[col])
         avg_emission_wavelength.append(weighted_sum / total_intensity)
     return avg_emission_wavelength
+         
+def calculate_max_emission_wavelength(df):
+    max_emission_wavelength = []
+    for col in df.columns:
+        max_wavelength = df.index[np.argmax(df[col])]
+        max_emission_wavelength.append(max_wavelength)
+    return max_emission_wavelength
+
 def augment_dataframe(df, avg_emission_wavelength, integrals):
     df_transposed = df.transpose()
     df_transposed_aew = df_transposed.copy()
@@ -220,6 +228,9 @@ if uploaded_file:
     integrals = calculate_integrals(df)
     avg_emission_wavelength = calculate_avg_emission_wavelength(df)
     df_transposed, df_augmented = augment_dataframe(df, avg_emission_wavelength, integrals)
+    max_emission_wavelength = calculate_max_emission_wavelength(df)
+    df_augmented["Max emission wavelength [nm]"] = max_emission_wavelength
+
 
     # download buttons
     excel_data = save_to_excel(header, df_augmented)
@@ -243,6 +254,13 @@ if uploaded_file:
         file_name=header["TITLE"] + "_intensity" + ".txt",
         mime='text/csv',
     )
+    max_wavelength_df_txt = df_to_txt(df_augmented, "Max emission wavelength [nm]")
+    st.sidebar.download_button(
+         label="Max Wavelength as .txt",
+         data=max_wavelength_df_txt,
+         file_name=header["TITLE"] + "_max_wavelength" + ".txt",
+         mime='text/csv',
+    )
 
     # # Convert the dictionary to a Pandas DataFrame
     # # Create the sidebar with the DataFrame
@@ -254,7 +272,7 @@ if uploaded_file:
             st.sidebar.text(f"{key}: {value}")
 
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Experiment all","Average Emission Wavelength", "Integral of Intensities", "Contour"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Experiment all","Average Emission Wavelength", "Max Emission Wavelength", "Integral of Intensities", "Contour"])
 
     with tab1:
         # Add a slider to the sidebar:
@@ -281,6 +299,11 @@ if uploaded_file:
        st.header("Average emission wavelength [nm]")
        fig = plot_data(df_augmented, "Average emission wavelength [nm]")
        st.plotly_chart(fig, use_container_width=True, theme = None, **{"config": config})
+
+    with tab2: # Change this to the tab where you want the max wavelength to appear
+       st.header("Max Emission Wavelength [nm]")
+       fig = plot_data(df_augmented, "Max emission wavelength [nm]")
+       st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
     with tab3:
        st.header("Integral of the intensity")
