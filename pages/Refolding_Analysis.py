@@ -28,7 +28,7 @@ config = {'displaylogo': False,
                 'width': download_width,
                 'scale': download_text_scale }, # Multiply title/legend/axis/canvas sizes by this factor
            'modeBarButtonsToAdd': ['hoverclosest', 'hovercompare', 'togglehover', 'togglespikelines',
-                                    'v1hovermode'
+                                    'v1hovermode',
                                     'drawline',
                                     'drawopenpath',
                                     'drawclosedpath',
