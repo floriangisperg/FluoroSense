@@ -300,17 +300,17 @@ if uploaded_file:
        fig = plot_data(df_augmented, "Average emission wavelength [nm]")
        st.plotly_chart(fig, use_container_width=True, theme = None, **{"config": config})
 
-    with tab2: # Change this to the tab where you want the max wavelength to appear
+    with tab3:
        st.header("Max Emission Wavelength [nm]")
        fig = plot_data(df_augmented, "Max emission wavelength [nm]")
        st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
-    with tab3:
+    with tab4:
        st.header("Integral of the intensity")
        fig = plot_data(df_augmented, "Integral")
        st.plotly_chart(fig, use_container_width=True, theme = None, **{"config": config})
 
-    with tab4:
+    with tab5:
        st.header("Contour plot")
        fig = plot_contour(df_transposed) #ncontours=15)
        st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
