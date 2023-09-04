@@ -19,9 +19,10 @@ Therefore, the denaturation of the protein is accompanied by the red-shift (towa
 
 The shift in the maxima of fluorescence peaks is most efficiently characterized by calculating the centre of mass of the peak, here called **Average Emission Wavelength (AEW)**, of each spectrum in the time series.
 
-\[
+$$
 AEW = \frac{\sum_{i}^{j} \text{Int}_i \times \text{Wavel}_i}{\sum_{i}^{j} \text{Int}_i}
-\]
+$$
+
 
 ## Use Cases
 
