@@ -40,7 +40,7 @@ def single_measurement_df_to_txt(df, header, suffix=''):
     return csv
 @st.cache_data
 def file_uploader():
-    uploaded_files = st.sidebar.file_uploader("Choose CSV files", accept_multiple_files=True)
+    uploaded_files = st.sidebar.file_uploader("Choose one or multiple CSV files", accept_multiple_files=True)
     data_headers_and_dfs = [upload_jasco_rawdata(file) for file in uploaded_files]
     return data_headers_and_dfs
 
