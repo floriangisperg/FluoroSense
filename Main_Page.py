@@ -1,7 +1,7 @@
 import streamlit as st
 st.set_page_config(layout="wide")
 st.markdown("""
-#Jasco Fluorimeter Data Analysis App
+# Jasco Fluorimeter Data Analysis App
 This application is designed to analyze the .csv output files from Jasco Spectrofluorometer. It is structured into two modules:
 
 1. **Time Series Measurement Analysis/Refolding Analysis**
