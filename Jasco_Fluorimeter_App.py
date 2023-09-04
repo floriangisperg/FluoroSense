@@ -1,4 +1,5 @@
-import streamlit as st
+thimport streamlit as st
+st.set_page_config(layout="wide")
 st.header("Jasco Fluorimeter Data Analysis")
 st.markdown("""
 This application is designed to analyze the .csv output files from Jasco Spectrofluorometer. It is structured into two modules:
