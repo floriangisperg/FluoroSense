@@ -20,3 +20,15 @@ st.subheader('Time Series Measurement')
 st.markdown('This module is used to analyze time series measurements where data are collected in the distinct time intervals over multiple minutes/hours.')
 st.subheader('Individual Spectra')
 st.markdown('This module is designed to visualize and process the individual spectra from a .csv output files.')
+st.markdown('Text written by Eva Prada')
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    st.info('**[@IBD Group](https://www.tuwien.at/tch/icebe/ibdgroup)**', icon="🎓")
+
+with c2:
+    st.info('**[CD Lab for Inclusion Body Processing 4.0](https://www.tuwien.at/tch/icebe/ibdgroup/forschungsthemen-projekte/inclusion-body-processing-40)**', icon="🧬")
+
+with c3:
+    st.info('**[@floriangisperg](https://github.com/floriangisperg)**', icon="👨‍💻")
