@@ -214,9 +214,9 @@ def df_to_txt(df, y_column):
     df_subset.to_csv(str_io, sep='\t', index=False)
     return str_io.getvalue()
 
-st.title("Jasco Refolding Monitoring App")
+#st.title("Jasco Refolding Monitoring App")
 with st.expander("Upload file here"):
-    uploaded_file = st.sidebar.file_uploader("Choose a file")
+    uploaded_file = st.sidebar.file_uploader("Choose CSV file")
 
 if uploaded_file:
     header, df, extended_info = upload_jasco_rawdata(uploaded_file)
