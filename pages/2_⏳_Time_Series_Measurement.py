@@ -127,14 +127,11 @@ def plot_data(df, y_column, template=template, width=width, height=height, confi
     fig.update_layout(autosize=False, width=width, height=height)
     # fig.show(config=config)
     return fig
+         
 @st.cache_data
 def plot_intensity(df, interval=None, template=template, width=width, height=height, config=config):
     if interval is not None:
         df = closest_times(df, interval)
-        df = df.reset_index(drop=True)
-        reduced_range = np.arange(0, df["Process Time [h]"].max(), interval)
-        reduced_range = np.append(reduced_range, df["Process Time [h]"].max())
-        df = df[df["Process Time [h]"].isin(reduced_range)]
         df = df.reset_index(drop=True)
 
     df_plot = df.T
@@ -167,6 +164,7 @@ def plot_intensity(df, interval=None, template=template, width=width, height=hei
 
     # fig.show(config=config)
     return fig
+
 @st.cache_data
 def plot_contour(df, ncontours=15, template=template, width=width, height=height, config=config):
     Z = df.to_numpy()
