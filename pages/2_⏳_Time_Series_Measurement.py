@@ -111,6 +111,11 @@ def augment_dataframe(df, avg_emission_wavelength, integrals, max_emission_wavel
     df_transposed_aew_integral["Process Time [h]"] = round(df_transposed_aew_integral["Process Time [min]"] / 60, 3)
     return df_transposed, df_transposed_aew_integral 
 
+def closest_times(df, interval):
+    available_times = df['Process Time [h]'].values
+    interval_times = np.arange(0, available_times.max(), interval)
+    closest_indices = np.searchsorted(available_times, interval_times, side='left').clip(0, len(available_times)-1)
+    return df.iloc[closest_indices]
 
 @st.cache_data
 def plot_data(df, y_column, template=template, width=width, height=height, config=config):
@@ -125,6 +130,8 @@ def plot_data(df, y_column, template=template, width=width, height=height, confi
 @st.cache_data
 def plot_intensity(df, interval=None, template=template, width=width, height=height, config=config):
     if interval is not None:
+        df = closest_times(df, interval)
+        df = df.reset_index(drop=True)
         reduced_range = np.arange(0, df["Process Time [h]"].max(), interval)
         reduced_range = np.append(reduced_range, df["Process Time [h]"].max())
         df = df[df["Process Time [h]"].isin(reduced_range)]
