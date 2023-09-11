@@ -75,6 +75,8 @@ def upload_jasco_rawdata(uploaded_file):
     else:
         df = pd.DataFrame()
 
+    return header, df, extended_info
+
 
 def single_measurement_df_to_txt(df, header, suffix=''):
     csv = df.to_csv(sep='\t', index=False).encode('utf-8')
