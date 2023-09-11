@@ -1,4 +1,3 @@
-from pages.2_⏳_Time_Series_Measurement import upload_jasco_rawdata
 import streamlit as st
 st.set_page_config(layout="wide")
 import plotly.graph_objects as go
@@ -34,6 +33,48 @@ config = {'displaylogo': False,
                                     'eraseshape'
                                        ],
           'displayModeBar': True}
+
+def upload_jasco_rawdata(uploaded_file):
+    header = {}
+    xydata = []
+    extended_info = {}
+
+    lines = uploaded_file.readlines()
+    mode = 'header'
+    for line in lines:
+        line = line.decode().strip() # decode byte stream to string
+        if line.startswith('XYDATA'):
+            mode = 'data'
+            continue
+        if line == '##### Extended Information':
+            mode = 'extended'
+            continue
+        if mode == 'header':
+            key, value = line.split(',', 1)
+            header[key] = value.rstrip(',')
+        elif mode == 'data':
+            if not line.startswith('#####'):
+                fields = line.split(',')
+                xydata.append(fields)
+            else:
+                mode = 'extended'
+        elif mode == 'extended':
+            if ',' in line:
+                key, value = line.split(',', 1)
+                extended_info[key.strip()] = value.strip()
+
+    if xydata:
+        df = pd.DataFrame(xydata[1:], columns=xydata[0])
+        for col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        try:
+            df.set_index('', inplace=True)
+        except:
+            df = df.iloc[:-1]
+            df.columns = ["Wavelength [nm]", "Intensity"]
+    else:
+        df = pd.DataFrame()
+
 
 def single_measurement_df_to_txt(df, header, suffix=''):
     csv = df.to_csv(sep='\t', index=False).encode('utf-8')
