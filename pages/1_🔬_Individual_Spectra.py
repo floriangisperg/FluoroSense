@@ -1,4 +1,4 @@
-from pages.Time_Series_Measurement import upload_jasco_rawdata
+from pages.2_⏳_Time_Series_Measurement import upload_jasco_rawdata
 import streamlit as st
 st.set_page_config(layout="wide")
 import plotly.graph_objects as go
