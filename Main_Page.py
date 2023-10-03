@@ -6,7 +6,7 @@ st.title('FluoroSense')
 st.markdown('This application is designed to analyze the .csv output files from Jasco Spectrofluorometer. It is structured into two modules – Time Series Measurement Analysis/Refolding Analysis and Single Spectrum Analysis.')
 
 st.header('Measurement Principles')
-st.subheader('Fluorescence emission spectra of intrinsic tryptophan and tyrosine as a monitoring tool for refolding of inclusion bodies')
+st.markdown('Fluorescence emission spectra of intrinsic tryptophan and tyrosine as a monitoring tool for refolding of inclusion bodies')
 
 st.markdown('---')  # Divider line
 
