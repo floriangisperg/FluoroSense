@@ -1,6 +1,6 @@
 streamlit==1.24.0
 plotly==5.15.0
-numpy
+numpy<2
 pandas==2.0.2
 scikit-learn==1.0.2
 xlsxwriter==3.0.3
