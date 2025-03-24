@@ -154,28 +154,35 @@ def subtract_blank_from_time_series(df, blank_method='timepoint', blank_timepoin
     result_df = df.copy()
     
     try:
-        # Convert all columns to numeric
-        for col in result_df.columns:
-            result_df[col] = pd.to_numeric(result_df[col], errors='coerce')
-        
         # Get the blank spectrum based on method
         if blank_method == 'timepoint' and blank_timepoint:
             if blank_timepoint in result_df.columns:
                 blank_spectrum = result_df[blank_timepoint]
             else:
-                st.error(f"Specified blank timepoint {blank_timepoint} not found in data")
+                st.error(f"Specified blank timepoint '{blank_timepoint}' not found in data")
+                st.write("Available columns:", df.columns.tolist()[:10], "..." if len(df.columns) > 10 else "")
                 return df
         
         elif blank_method == 'average' and blank_start and blank_end:
-            # Get all columns between blank_start and blank_end
-            cols_between = [col for col in result_df.columns 
-                           if pd.to_numeric(col, errors='coerce') >= pd.to_numeric(blank_start, errors='coerce') 
-                           and pd.to_numeric(col, errors='coerce') <= pd.to_numeric(blank_end, errors='coerce')]
-            
-            if cols_between:
-                blank_spectrum = result_df[cols_between].mean(axis=1)
-            else:
-                st.error(f"No columns found between {blank_start} and {blank_end}")
+            # Get all columns between blank_start and blank_end (inclusive)
+            column_options = df.columns.tolist()
+            try:
+                start_idx = column_options.index(blank_start)
+                end_idx = column_options.index(blank_end)
+                
+                # Make sure start_idx is before end_idx
+                if start_idx > end_idx:
+                    start_idx, end_idx = end_idx, start_idx
+                
+                cols_between = column_options[start_idx:(end_idx + 1)]
+                
+                if cols_between:
+                    blank_spectrum = result_df[cols_between].mean(axis=1)
+                else:
+                    st.error(f"No columns found between '{blank_start}' and '{blank_end}'")
+                    return df
+            except Exception as e:
+                st.error(f"Error finding columns for average blank: {str(e)}")
                 return df
         else:
             st.error("Invalid blank subtraction parameters")
@@ -193,7 +200,7 @@ def subtract_blank_from_time_series(df, blank_method='timepoint', blank_timepoin
     except Exception as e:
         st.error(f"Error during blank subtraction: {str(e)}")
         return df
-
+             
 def blank_subtraction_ui(df):
     """
     Create UI elements for blank subtraction in Time Series
@@ -212,21 +219,15 @@ def blank_subtraction_ui(df):
         st.session_state['blank_subtraction_applied'] = False
         return df
     
-    # Convert columns to numeric and sort them
-    numeric_columns = []
-    for col in df.columns:
-        try:
-            numeric_columns.append(float(col))
-        except ValueError:
-            continue
+    # Display all actual column names for debugging
+    with st.sidebar.expander("Debug Column Names", expanded=False):
+        st.write("Available columns:", df.columns.tolist())
     
-    numeric_columns.sort()
-    
-    # Convert back to strings for selection
-    column_options = [str(col) for col in numeric_columns]
+    # Use actual column names for selection
+    column_options = df.columns.tolist()
     
     if not column_options:
-        st.sidebar.warning("No numeric column names found for blank selection")
+        st.sidebar.warning("No columns found for blank selection")
         return df
     
     blank_method = st.sidebar.radio(
@@ -289,10 +290,15 @@ def blank_subtraction_ui(df):
         # Preview the average blank
         if st.sidebar.checkbox("Preview Average Blank Spectrum", False):
             try:
-                # Get all columns between blank_start and blank_end
-                cols_between = [col for col in df.columns 
-                               if pd.to_numeric(col, errors='coerce') >= float(blank_start) 
-                               and pd.to_numeric(col, errors='coerce') <= float(blank_end)]
+                # Get columns between blank_start and blank_end (inclusive)
+                start_idx = column_options.index(blank_start)
+                end_idx = column_options.index(blank_end)
+                
+                # Make sure start_idx is before end_idx
+                if start_idx > end_idx:
+                    start_idx, end_idx = end_idx, start_idx
+                
+                cols_between = column_options[start_idx:(end_idx + 1)]
                 
                 if cols_between:
                     avg_blank = df[cols_between].mean(axis=1)
@@ -302,7 +308,7 @@ def blank_subtraction_ui(df):
                         x=df.index,
                         y=avg_blank,
                         mode='lines',
-                        name=f'Average Blank ({blank_start}-{blank_end})'
+                        name=f'Average Blank'
                     ))
                     fig.update_layout(
                         title="Average Blank Spectrum",
