@@ -219,9 +219,6 @@ def blank_subtraction_ui(df):
         st.session_state['blank_subtraction_applied'] = False
         return df
     
-    # Display all actual column names for debugging
-    with st.sidebar.expander("Debug Column Names", expanded=False):
-        st.write("Available columns:", df.columns.tolist())
     
     # Use actual column names for selection
     column_options = df.columns.tolist()
@@ -682,12 +679,6 @@ with st.expander("Upload file here"):
 if uploaded_file:
     header, df, extended_info = upload_jasco_rawdata(uploaded_file)
     
-    # Add debugging info (optional but helpful)
-    with st.sidebar.expander("Debug Information", expanded=False):
-        st.write("DataFrame Shape:", df.shape)
-        st.write("DataFrame Columns:", df.columns.tolist()[:10] + (["..."] if len(df.columns) > 10 else []))
-        st.write("DataFrame Index Type:", type(df.index))
-        st.write("Extended Info Keys:", list(extended_info.keys()) if extended_info else "None")
     
     # Clean up the data
     df = preprocess_time_series_data(df)
