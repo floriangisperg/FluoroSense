@@ -136,113 +136,45 @@ def upload_jasco_rawdata(uploaded_file):
         
     return header, df, extended_info
 
-def subtract_blank_from_time_series(df, blank_method='timepoint', blank_timepoint=None, blank_start=None, blank_end=None):
-    """
-    Subtract a blank spectrum from all spectra in a time series
-    
-    Args:
-        df: DataFrame with wavelengths as index and time points as columns
-        blank_method: 'timepoint' for single timepoint, 'average' for average of time range
-        blank_timepoint: Column name (timepoint) to use as blank if blank_method is 'timepoint'
-        blank_start: Starting timepoint for average if blank_method is 'average'
-        blank_end: Ending timepoint for average if blank_method is 'average'
-        
-    Returns:
-        DataFrame with blank subtracted from all columns
-    """
-    # Make a copy of the input DataFrame to avoid modifying the original
-    result_df = df.copy()
-    
-    try:
-        # Get the blank spectrum based on method
-        if blank_method == 'timepoint' and blank_timepoint:
-            if blank_timepoint in result_df.columns:
-                blank_spectrum = result_df[blank_timepoint]
-            else:
-                st.error(f"Specified blank timepoint '{blank_timepoint}' not found in data")
-                st.write("Available columns:", df.columns.tolist()[:10], "..." if len(df.columns) > 10 else "")
-                return df
-        
-        elif blank_method == 'average' and blank_start and blank_end:
-            # Get all columns between blank_start and blank_end (inclusive)
-            column_options = df.columns.tolist()
-            try:
-                start_idx = column_options.index(blank_start)
-                end_idx = column_options.index(blank_end)
-                
-                # Make sure start_idx is before end_idx
-                if start_idx > end_idx:
-                    start_idx, end_idx = end_idx, start_idx
-                
-                cols_between = column_options[start_idx:(end_idx + 1)]
-                
-                if cols_between:
-                    blank_spectrum = result_df[cols_between].mean(axis=1)
-                else:
-                    st.error(f"No columns found between '{blank_start}' and '{blank_end}'")
-                    return df
-            except Exception as e:
-                st.error(f"Error finding columns for average blank: {str(e)}")
-                return df
-        else:
-            st.error("Invalid blank subtraction parameters")
-            return df
-        
-        # Subtract the blank spectrum from each column
-        for col in result_df.columns:
-            result_df[col] = result_df[col] - blank_spectrum
-        
-        # Store that blank subtraction was applied (for file naming)
-        st.session_state['blank_subtraction_applied'] = True
-        
-        return result_df
-        
-    except Exception as e:
-        st.error(f"Error during blank subtraction: {str(e)}")
-        return df
-             
+
 def blank_subtraction_ui(df):
     """
     Create UI elements for blank subtraction in Time Series
-    
+
     Args:
         df: DataFrame with wavelengths as index and time points as columns
-        
+
     Returns:
         DataFrame (either original or with blank subtracted)
     """
     st.sidebar.markdown("## Blank Subtraction")
     use_blank = st.sidebar.checkbox("Apply Blank Subtraction", False)
-    
+
     # Reset flag if not using blank subtraction
     if not use_blank:
         st.session_state['blank_subtraction_applied'] = False
         return df
-    
-    # Display all actual column names for debugging
-    with st.sidebar.expander("Debug Column Names", expanded=False):
-        st.write("Available columns:", df.columns.tolist())
-    
+
     # Use actual column names for selection
     column_options = df.columns.tolist()
-    
+
     if not column_options:
         st.sidebar.warning("No columns found for blank selection")
         return df
-    
+
     blank_method = st.sidebar.radio(
         "Blank Subtraction Method",
         ["Single Timepoint", "Average of Range"],
         index=0
     )
-    
+
     if blank_method == "Single Timepoint":
         blank_timepoint = st.sidebar.selectbox(
             "Select timepoint to use as blank",
             column_options,
             index=0
         )
-        
+
         # Preview the selected blank
         if st.sidebar.checkbox("Preview Blank Spectrum", False):
             try:
@@ -260,14 +192,14 @@ def blank_subtraction_ui(df):
                 )
                 st.sidebar.plotly_chart(fig, use_container_width=True)
             except Exception as e:
-                st.sidebar.error(f"Error previewing blank: {str(e)}")
-        
+                st.sidebar.error(f"Error previewing blank")
+
         result_df = subtract_blank_from_time_series(
-            df, 
+            df,
             blank_method='timepoint',
             blank_timepoint=blank_timepoint
         )
-        
+
     else:  # Average of Range
         col1, col2 = st.sidebar.columns(2)
         with col1:
@@ -280,29 +212,29 @@ def blank_subtraction_ui(df):
             # Find index of start point and set end to start+3 by default (if possible)
             start_index = column_options.index(blank_start)
             default_end_index = min(start_index + 3, len(column_options) - 1)
-            
+
             blank_end = st.selectbox(
                 "End timepoint",
                 column_options,
                 index=default_end_index
             )
-        
+
         # Preview the average blank
         if st.sidebar.checkbox("Preview Average Blank Spectrum", False):
             try:
                 # Get columns between blank_start and blank_end (inclusive)
                 start_idx = column_options.index(blank_start)
                 end_idx = column_options.index(blank_end)
-                
+
                 # Make sure start_idx is before end_idx
                 if start_idx > end_idx:
                     start_idx, end_idx = end_idx, start_idx
-                
+
                 cols_between = column_options[start_idx:(end_idx + 1)]
-                
+
                 if cols_between:
                     avg_blank = df[cols_between].mean(axis=1)
-                    
+
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=df.index,
@@ -319,19 +251,19 @@ def blank_subtraction_ui(df):
                 else:
                     st.sidebar.warning("No columns found in selected range")
             except Exception as e:
-                st.sidebar.error(f"Error previewing average blank: {str(e)}")
-        
+                st.sidebar.error(f"Error previewing average blank")
+
         result_df = subtract_blank_from_time_series(
-            df, 
+            df,
             blank_method='average',
             blank_start=blank_start,
             blank_end=blank_end
         )
-    
+
     # Option to download the blank-subtracted data
     if st.session_state.get('blank_subtraction_applied', False):
         st.sidebar.success("Blank subtraction applied!")
-        
+
         # Create download button for blank-subtracted data
         csv = result_df.to_csv(sep='\t').encode('utf-8')
         st.sidebar.download_button(
@@ -340,8 +272,74 @@ def blank_subtraction_ui(df):
             file_name="blank_subtracted_data.txt",
             mime='text/plain',
         )
-    
+
     return result_df
+
+
+def subtract_blank_from_time_series(df, blank_method='timepoint', blank_timepoint=None, blank_start=None,
+                                    blank_end=None):
+    """
+    Subtract a blank spectrum from all spectra in a time series
+
+    Args:
+        df: DataFrame with wavelengths as index and time points as columns
+        blank_method: 'timepoint' for single timepoint, 'average' for average of time range
+        blank_timepoint: Column name (timepoint) to use as blank if blank_method is 'timepoint'
+        blank_start: Starting timepoint for average if blank_method is 'average'
+        blank_end: Ending timepoint for average if blank_method is 'average'
+
+    Returns:
+        DataFrame with blank subtracted from all columns
+    """
+    # Make a copy of the input DataFrame to avoid modifying the original
+    result_df = df.copy()
+
+    try:
+        # Get the blank spectrum based on method
+        if blank_method == 'timepoint' and blank_timepoint:
+            if blank_timepoint in result_df.columns:
+                blank_spectrum = result_df[blank_timepoint]
+            else:
+                st.error(f"Specified blank timepoint not found in data")
+                return df
+
+        elif blank_method == 'average' and blank_start and blank_end:
+            # Get all columns between blank_start and blank_end (inclusive)
+            column_options = df.columns.tolist()
+            try:
+                start_idx = column_options.index(blank_start)
+                end_idx = column_options.index(blank_end)
+
+                # Make sure start_idx is before end_idx
+                if start_idx > end_idx:
+                    start_idx, end_idx = end_idx, start_idx
+
+                cols_between = column_options[start_idx:(end_idx + 1)]
+
+                if cols_between:
+                    blank_spectrum = result_df[cols_between].mean(axis=1)
+                else:
+                    st.error(f"No columns found in selected range")
+                    return df
+            except Exception as e:
+                st.error(f"Error finding columns for average blank")
+                return df
+        else:
+            st.error("Invalid blank subtraction parameters")
+            return df
+
+        # Subtract the blank spectrum from each column
+        for col in result_df.columns:
+            result_df[col] = result_df[col] - blank_spectrum
+
+        # Store that blank subtraction was applied (for file naming)
+        st.session_state['blank_subtraction_applied'] = True
+
+        return result_df
+
+    except Exception as e:
+        st.error("Error during blank subtraction")
+        return df
 
 def preprocess_time_series_data(df):
     """Clean and prepare time series data"""
@@ -471,6 +469,7 @@ def calculate_max_emission_wavelength(df):
         st.error(f"Error calculating max emission wavelengths: {str(e)}")
         return []
 
+
 def augment_dataframe(df, avg_emission_wavelength, integrals, max_emission_wavelength):
     """Combine all calculated metrics into a processed dataframe"""
     try:
@@ -479,18 +478,35 @@ def augment_dataframe(df, avg_emission_wavelength, integrals, max_emission_wavel
         df_transposed_aew["Average emission wavelength [nm]"] = avg_emission_wavelength
         df_transposed_aew_integral = df_transposed_aew.copy()
         df_transposed_aew_integral["Integral"] = integrals
-        df_transposed_aew_integral["Max emission wavelength [nm]"] = max_emission_wavelength     
-        df_transposed_aew_integral.reset_index(inplace = True)
-        df_transposed_aew_integral.rename(columns={df_transposed_aew_integral.columns[0]: "Process Time [min]"}, inplace=True)
-        df_transposed_aew_integral["Process Time [min]"] = pd.to_numeric(df_transposed_aew_integral["Process Time [min]"], errors='coerce')
+        df_transposed_aew_integral["Max emission wavelength [nm]"] = max_emission_wavelength
+        df_transposed_aew_integral.reset_index(inplace=True)
+        df_transposed_aew_integral.rename(columns={df_transposed_aew_integral.columns[0]: "Process Time [min]"},
+                                          inplace=True)
+
+        # Ensure Process Time is properly converted to numeric
+        try:
+            df_transposed_aew_integral["Process Time [min]"] = pd.to_numeric(
+                df_transposed_aew_integral["Process Time [min]"], errors='coerce')
+        except:
+            # If conversion fails, try to extract numeric values from string columns
+            try:
+                # Try to extract numeric values if column contains strings with numbers
+                df_transposed_aew_integral["Process Time [min]"] = df_transposed_aew_integral[
+                    "Process Time [min]"].astype(str).str.extract(r'(\d+\.?\d*)').astype(float)
+            except:
+                # If all else fails, create a sequence
+                df_transposed_aew_integral["Process Time [min]"] = range(len(df_transposed_aew_integral))
+
+        # Calculate time in hours
         df_transposed_aew_integral["Process Time [h]"] = round(df_transposed_aew_integral["Process Time [min]"] / 60, 3)
+
         return df_transposed, df_transposed_aew_integral
     except Exception as e:
-        st.error(f"Error creating augmented dataframe: {str(e)}")
+        st.error("Error creating augmented dataframe")
         # Return empty dataframes to avoid breaking downstream functions
-        return pd.DataFrame(), pd.DataFrame(columns=["Process Time [min]", "Process Time [h]", 
-                                                   "Average emission wavelength [nm]", 
-                                                   "Integral", "Max emission wavelength [nm]"])
+        return pd.DataFrame(), pd.DataFrame(columns=["Process Time [min]", "Process Time [h]",
+                                                     "Average emission wavelength [nm]",
+                                                     "Integral", "Max emission wavelength [nm]"])
 
 def closest_times(df, interval):
     """Find closest times for selected interval"""
@@ -675,26 +691,19 @@ def df_to_txt(df, y_column):
 if 'blank_subtraction_applied' not in st.session_state:
     st.session_state['blank_subtraction_applied'] = False
 
-# Main application flow
+# Main application flow (clean version without debugging)
 with st.expander("Upload file here"):
     uploaded_file = st.sidebar.file_uploader("Choose CSV file")
 
 if uploaded_file:
     header, df, extended_info = upload_jasco_rawdata(uploaded_file)
-    
-    # Add debugging info (optional but helpful)
-    with st.sidebar.expander("Debug Information", expanded=False):
-        st.write("DataFrame Shape:", df.shape)
-        st.write("DataFrame Columns:", df.columns.tolist()[:10] + (["..."] if len(df.columns) > 10 else []))
-        st.write("DataFrame Index Type:", type(df.index))
-        st.write("Extended Info Keys:", list(extended_info.keys()) if extended_info else "None")
-    
+
     # Clean up the data
     df = preprocess_time_series_data(df)
-    
+
     # Apply blank subtraction if requested
     df = blank_subtraction_ui(df)
-    
+
     # Calculate metrics
     integrals = calculate_integrals(df)
     avg_emission_wavelength = calculate_avg_emission_wavelength(df)
@@ -703,7 +712,7 @@ if uploaded_file:
 
     # Add file suffix if blank subtraction was applied
     file_suffix = "_blank_subtracted" if st.session_state.get('blank_subtraction_applied', False) else ""
-    
+
     # Download buttons
     excel_data = save_to_excel(header, df_augmented)
     st.sidebar.download_button(
@@ -712,15 +721,15 @@ if uploaded_file:
         file_name=header.get("TITLE", "data") + "_processed" + file_suffix + ".xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-         
+
     aew_df_txt = df_to_txt(df_augmented, "Average emission wavelength [nm]")
     st.sidebar.download_button(
         label="AEW as .txt",
-        data= aew_df_txt,
-        file_name= header.get("TITLE", "data") + "_aew" + file_suffix + ".txt",
+        data=aew_df_txt,
+        file_name=header.get("TITLE", "data") + "_aew" + file_suffix + ".txt",
         mime='text/csv',
     )
-    
+
     intensity_df_txt = df_to_txt(df_augmented, "Integral")
     st.sidebar.download_button(
         label="Intensity as .txt",
@@ -728,13 +737,13 @@ if uploaded_file:
         file_name=header.get("TITLE", "data") + "_intensity" + file_suffix + ".txt",
         mime='text/csv',
     )
-    
+
     max_wavelength_df_txt = df_to_txt(df_augmented, "Max emission wavelength [nm]")
     st.sidebar.download_button(
-         label="Max Wavelength as .txt",
-         data=max_wavelength_df_txt,
-         file_name=header.get("TITLE", "data") + "_max_wavelength" + file_suffix + ".txt",
-         mime='text/csv',
+        label="Max Wavelength as .txt",
+        data=max_wavelength_df_txt,
+        file_name=header.get("TITLE", "data") + "_max_wavelength" + file_suffix + ".txt",
+        mime='text/csv',
     )
 
     # Display header info in sidebar
@@ -746,37 +755,39 @@ if uploaded_file:
     # Add info about blank subtraction if applied
     if st.session_state.get('blank_subtraction_applied', False):
         st.info("Note: Blank subtraction has been applied to all spectra.")
-        
+
     # Create tabs for different visualizations
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Experiment all","Average Emission Wavelength", "Max Emission Wavelength", "Integral of Intensities", "Contour"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["Experiment all", "Average Emission Wavelength", "Max Emission Wavelength", "Integral of Intensities",
+         "Contour"])
 
     with tab1:
         # Add a slider to select time interval
         interval = st.select_slider(
             'Select time interval of plotted graphs',
-            options=[None, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2], value = 0.25)
-        
+            options=[None, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2], value=0.25)
+
         # Plot intensity with selected interval
         fig = plot_intensity(df_augmented, interval=interval)
         # Show the plot
         st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
     with tab2:
-       st.header("Average emission wavelength [nm]")
-       fig = plot_data(df_augmented, "Average emission wavelength [nm]")
-       st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+        st.header("Average emission wavelength [nm]")
+        fig = plot_data(df_augmented, "Average emission wavelength [nm]")
+        st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
     with tab3:
-       st.header("Max Emission Wavelength [nm]")
-       fig = plot_data(df_augmented, "Max emission wavelength [nm]")
-       st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+        st.header("Max Emission Wavelength [nm]")
+        fig = plot_data(df_augmented, "Max emission wavelength [nm]")
+        st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
     with tab4:
-       st.header("Integral of the intensity")
-       fig = plot_data(df_augmented, "Integral")
-       st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+        st.header("Integral of the intensity")
+        fig = plot_data(df_augmented, "Integral")
+        st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
 
     with tab5:
-       st.header("Contour plot")
-       fig = plot_contour(df_transposed) #ncontours=15)
-       st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+        st.header("Contour plot")
+        fig = plot_contour(df_transposed)  # ncontours=15)
+        st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
