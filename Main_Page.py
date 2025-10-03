@@ -20,7 +20,7 @@ st.subheader('Time Series Measurement')
 st.markdown('This module is used to analyze time series measurements where data are collected in the distinct time intervals over multiple minutes/hours.')
 st.subheader('Individual Spectra')
 st.markdown('This module is designed to visualize and process the individual spectra from a .csv output files.')
-st.markdown('Text written by Eva Prada')
+st.markdown('Text written by Eva Prada-Brichtova')
 st.markdown('---')  # Divider line
 
 c1, c2, c3 = st.columns(3)
