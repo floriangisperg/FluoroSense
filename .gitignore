@@ -82,6 +82,17 @@ yarn-error.log*
 
 # Specific files to ignore
 agents.md
-claude.mde
+claude.md
 
+
+# Dev containers
+.devcontainer/
+.devcontainer.json
+
+
+# OpenSpec
+openspec/
+
+# Data
+data/
 
