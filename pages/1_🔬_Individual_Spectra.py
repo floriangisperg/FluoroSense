@@ -1,38 +1,53 @@
+"""
+FluoroSense - Individual Spectra Analysis
+Dark Lab Theme Applied
+"""
 import streamlit as st
 
-st.set_page_config(layout="wide")
+# Page config must be first
+st.set_page_config(
+    layout="wide",
+    page_title="Individual Spectra",
+    page_icon="🔬"
+)
+
+from styles import apply_dark_lab_theme, get_plotly_dark_template, EMISSION_PALETTE
+
+# Apply theme after page config
+apply_dark_lab_theme()
+
 import plotly.graph_objects as go
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
-# plot settings:
-width = 1250
-height = 750
-template = "seaborn"  # 'ggplot2', 'seaborn', 'simple_white', 'plotly',
-# 'plotly_white', 'plotly_dark', 'presentation', 'xgridoff',
-# 'ygridoff', 'gridon', 'none'
-download_width = 1250
-download_height = 750
+# Plot settings - Dark Lab theme
+width = 1200
+height = 600
+download_width = 1200
+download_height = 600
 download_text_scale = 1
-config = {'displaylogo': False,
-          'toImageButtonOptions': {  # download settings
-              'format': 'svg',  # one of png, svg, jpeg, webp
-              'filename': 'plot',
-              'height': download_height,
-              'width': download_width,
-              'scale': download_text_scale},  # Multiply title/legend/axis/canvas sizes by this factor
-          'modeBarButtonsToAdd': ['hoverclosest', 'hovercompare', 'togglehover', 'togglespikelines',
-                                  'v1hovermode'
-                                  'drawline',
-                                  'drawopenpath',
-                                  'drawclosedpath',
-                                  'drawcircle',
-                                  'drawrect',
-                                  'eraseshape'
-                                  ],
-          'displayModeBar': True}
+
+config = {
+    'displaylogo': False,
+    'toImageButtonOptions': {
+        'format': 'svg',
+        'filename': 'fluorosense_plot',
+        'height': download_height,
+        'width': download_width,
+        'scale': download_text_scale
+    },
+    'modeBarButtonsToAdd': [
+        'hoverclosest', 'hovercompare', 'togglehover', 'togglespikelines',
+        'v1hovermode', 'drawline', 'drawopenpath', 'drawclosedpath',
+        'drawcircle', 'drawrect', 'eraseshape'
+    ],
+    'displayModeBar': True
+}
+
+# Dark template for Plotly
+dark_template = get_plotly_dark_template()
 
 
 def upload_jasco_rawdata(uploaded_file):
@@ -43,7 +58,7 @@ def upload_jasco_rawdata(uploaded_file):
     lines = uploaded_file.readlines()
     mode = 'header'
     for line in lines:
-        line = line.decode().strip()  # decode byte stream to string
+        line = line.decode().strip()
         if line.startswith('XYDATA'):
             mode = 'data'
             continue
@@ -84,24 +99,18 @@ def single_measurement_df_to_txt(df, header, suffix=''):
     return csv
 
 
-@st.cache_data
-def file_uploader():
-    uploaded_files = st.sidebar.file_uploader("Choose one or multiple CSV files", accept_multiple_files=True)
-    data_headers_and_dfs = [upload_jasco_rawdata(file) for file in uploaded_files]
-    return data_headers_and_dfs
-
-
 def convert_df_to_txt(df, header):
     txt = single_measurement_df_to_txt(df, header)
-    return txt.encode('utf-8')  # Encode as byte stream for download
+    return txt.encode('utf-8')
+
 
 def subtract_blank(sample_df, blank_df):
     if blank_df.empty:
         return sample_df
-    # Ensure that we only subtract the 'Intensity' column
     corrected_df = sample_df.copy()
     corrected_df['Intensity'] = sample_df['Intensity'] - blank_df['Intensity'].values
     return corrected_df
+
 
 @st.cache_data
 def calculate_avg_emission_wavelength(df):
@@ -125,68 +134,96 @@ def download_data(data_headers_and_dfs, suffix=''):
 @st.cache_data
 def normalize(df):
     scaler = MinMaxScaler()
-
-    # Select the columns to scale
     cols_to_scale = df.columns.difference(['Wavelength [nm]'])
-
-    # Scale those columns
     scaled_cols = pd.DataFrame(scaler.fit_transform(df[cols_to_scale]),
                                columns=cols_to_scale,
                                index=df.index)
-
-    # Concatenate the scaled columns with the ones that weren't scaled
     df_normalized = pd.concat([df['Wavelength [nm]'], scaled_cols], axis=1)
-
     return df_normalized
 
 
 def calculate_integral(df):
-    return simps(df["Intensity"], df["Wavelength [nm]"])
+    return simpson(df["Intensity"], df["Wavelength [nm]"])
 
 
-def plot_data(data_headers_and_dfs, template=template, width=width, height=height, config=config):
+def plot_data(data_headers_and_dfs):
     fig = go.Figure()
 
     for i, (header, df, extended_info) in enumerate(data_headers_and_dfs):
-        fig.add_trace(
-            go.Scatter(
-                x=df["Wavelength [nm]"],
-                y=df["Intensity"],
-                name=header['TITLE'],
-                customdata=np.tile(header['TITLE'], len(df.index)),
-                hovertemplate=
-                '<b>Title:</b> %{customdata}<br>' +
-                '<b>Wavelength [nm]:</b> %{x}<br>' +
-                '<b>Intensity:</b> %{y}<extra></extra>',
-            ))
+        color = EMISSION_PALETTE[i % len(EMISSION_PALETTE)]
+        fig.add_trace(go.Scatter(
+            x=df["Wavelength [nm]"],
+            y=df["Intensity"],
+            name=header['TITLE'],
+            customdata=np.tile(header['TITLE'], len(df.index)),
+            hovertemplate='<b>%{customdata}</b><br>WL: %{x} nm<br>Intensity: %{y}<extra></extra>',
+            line=dict(color=color, width=2),
+            marker=dict(color=color)
+        ))
 
     fig.update_layout(
+        **dark_template['layout'],
         width=width,
         height=height,
-        template=template,
         xaxis_title="Wavelength [nm]",
         yaxis_title="Intensity",
         legend_title="Experiment"
     )
 
-    st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+    st.plotly_chart(fig, width='stretch', config=config)
+
+
+def plot_bar_chart(df, x_col, y_col, title):
+    fig = go.Figure(data=[
+        go.Bar(
+            name=title,
+            x=df[x_col],
+            y=df[y_col],
+            marker_color=EMISSION_PALETTE[:len(df)],
+            hovertemplate=f'<b>%{{x}}</b><br>{title}: %{{y}}<extra></extra>',
+        )
+    ])
+
+    fig.update_layout(
+        **dark_template['layout'],
+        width=width,
+        height=height,
+        xaxis_title="Experiment",
+        yaxis_title=title,
+        showlegend=False
+    )
+
+    st.plotly_chart(fig, width='stretch', config=config)
 
 
 def main():
+    # Page header
+    st.title("Individual Spectra Analysis")
+    st.markdown("Upload Jasco spectrofluorometer CSV files to analyze individual emission spectra.")
+
+    # Sidebar
+    st.sidebar.header("Data Upload")
+
     # File uploader for sample files
     uploaded_files = st.sidebar.file_uploader("Choose CSV files", accept_multiple_files=True)
 
-    # Blank file uploader and subtraction toggle
-    st.sidebar.markdown("### Blank File Upload")
-    blank_file = st.sidebar.file_uploader("Upload a Blank File", accept_multiple_files=False)
+    # Blank file section
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Blank Subtraction")
+    blank_file = st.sidebar.file_uploader("Upload blank file", accept_multiple_files=False)
     use_blank = st.sidebar.checkbox("Subtract Blank", False)
+
+    if use_blank and blank_file:
+        st.sidebar.success("Blank subtraction enabled")
+    elif use_blank and not blank_file:
+        st.sidebar.warning("Upload a blank file")
 
     # Process the blank file
     blank_header, blank_df, blank_extended_info = (None, pd.DataFrame(), None)
     if blank_file is not None:
         blank_header, blank_df, blank_extended_info = upload_jasco_rawdata(blank_file)
 
-    # Process the sample files and subtract blank if required
+    # Process the sample files
     data_headers_and_dfs = []
     for file in uploaded_files:
         header, df, extended_info = upload_jasco_rawdata(file)
@@ -200,63 +237,68 @@ def main():
         if len(titles) != len(set(titles)):
             st.warning("Duplicate files detected. Please upload only unique files.")
         else:
-            tab1, tab2, tab3, tab4 = st.tabs(
-                ["Raw Data Visualization", "Average Emission Wavelength", "Integral", "Normalized Data"])
+            # Display file info
+            with st.expander("File Information", expanded=False):
+                for header, df, extended_info in data_headers_and_dfs:
+                    st.markdown(f"**{header.get('TITLE', 'Unknown')}**")
+                    cols = st.columns(3)
+                    cols[0].metric("Data Points", len(df))
+                    cols[1].metric("WL Range", f"{df['Wavelength [nm]'].min():.1f} - {df['Wavelength [nm]'].max():.1f} nm")
+                    cols[2].metric("Max Intensity", f"{df['Intensity'].max():.1f}")
+
+            # Tabs
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "Raw Data",
+                "Average Emission Wavelength",
+                "Integral",
+                "Normalized Data"
+            ])
 
             with tab1:
-                # st.write("Dataframes loaded successfully. Ready for visualization.")
+                st.subheader("Emission Spectra")
                 plot_data(data_headers_and_dfs)
-                # st.write("Visualization complete. Ready for download.")
                 download_data(data_headers_and_dfs)
 
             with tab2:
-                avg_emission_wavelength = [(header['TITLE'], calculate_avg_emission_wavelength(df)) for
-                                           header, df, extended_info in data_headers_and_dfs]
-                avg_emission_df = pd.DataFrame(avg_emission_wavelength,
-                                               columns=["Title", "Average Emission Wavelength"])
+                st.subheader("Average Emission Wavelength")
+                st.markdown("The AEW represents the intensity-weighted center of mass of the emission spectrum.")
 
-                st.dataframe(avg_emission_df, use_container_width=True)
+                avg_emission_wavelength = [
+                    (header['TITLE'], calculate_avg_emission_wavelength(df))
+                    for header, df, extended_info in data_headers_and_dfs
+                ]
+                avg_emission_df = pd.DataFrame(
+                    avg_emission_wavelength,
+                    columns=["Title", "Average Emission Wavelength"]
+                )
+
+                st.dataframe(avg_emission_df, width='stretch', hide_index=True)
+
+                # Download button
                 avg_emission_csv = avg_emission_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    label="Download average emission wavelengths as CSV",
+                    label="Download AEW data as CSV",
                     data=avg_emission_csv,
-                    file_name='avg_emission.csv',
+                    file_name='average_emission_wavelength.csv',
                     mime='text/csv',
                 )
 
-                # Calculate min and max values with some padding
-                y_min = avg_emission_df['Average Emission Wavelength'].min() * 0.975
-                y_max = avg_emission_df['Average Emission Wavelength'].max() * 1.025
-
-                fig = go.Figure(data=[
-                    go.Bar(
-                        name='Average Emission Wavelength',
-                        x=avg_emission_df['Title'],
-                        y=avg_emission_df['Average Emission Wavelength'],
-                        hovertemplate=
-                        '<b>Title:</b> %{x}<br>' +
-                        '<b>Average Emission Wavelength:</b> %{y}<extra></extra>',
-                    )
-                ])
-
-                fig.update_layout(
-                    width=width,
-                    height=height,
-                    template=template,
-                    xaxis_title="Experiment",
-                    yaxis_title="Average Emission Wavelength",
-                    legend_title="Measurement",
-                    yaxis_range=[y_min, y_max]  # Use calculated min and max values
-                )
-
-                st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+                # Bar chart
+                plot_bar_chart(avg_emission_df, "Title", "Average Emission Wavelength", "AEW [nm]")
 
             with tab3:
-                integrals = [(header['TITLE'], calculate_integral(df)) for header, df, extended_info in
-                             data_headers_and_dfs]
+                st.subheader("Spectral Integral")
+                st.markdown("The integral represents the total fluorescence intensity across all wavelengths.")
+
+                integrals = [
+                    (header['TITLE'], calculate_integral(df))
+                    for header, df, extended_info in data_headers_and_dfs
+                ]
                 integrals_df = pd.DataFrame(integrals, columns=["Title", "Integral"])
 
-                st.dataframe(integrals_df, use_container_width=True)
+                st.dataframe(integrals_df, width='stretch', hide_index=True)
+
+                # Download button
                 integrals_csv = integrals_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="Download integrals as CSV",
@@ -265,31 +307,17 @@ def main():
                     mime='text/csv',
                 )
 
-                fig = go.Figure(data=[
-                    go.Bar(
-                        name='Integral',
-                        x=integrals_df['Title'],
-                        y=integrals_df['Integral'],
-                        hovertemplate=
-                        '<b>Title:</b> %{x}<br>' +
-                        '<b>Integral:</b> %{y}<extra></extra>',
-                    )
-                ])
-
-                fig.update_layout(
-                    width=width,
-                    height=height,
-                    template=template,
-                    xaxis_title="Experiment",
-                    yaxis_title="Integral",
-                    legend_title="Measurement",
-                )
-
-                st.plotly_chart(fig, use_container_width=True, theme=None, **{"config": config})
+                # Bar chart
+                plot_bar_chart(integrals_df, "Title", "Integral", "Integral")
 
             with tab4:
-                data_headers_and_dfs_normalized = [(header, normalize(df), extended_info) for header, df, extended_info
-                                                   in data_headers_and_dfs]
+                st.subheader("Normalized Spectra")
+                st.markdown("Spectra normalized to [0, 1] range for shape comparison.")
+
+                data_headers_and_dfs_normalized = [
+                    (header, normalize(df), extended_info)
+                    for header, df, extended_info in data_headers_and_dfs
+                ]
                 plot_data(data_headers_and_dfs_normalized)
                 download_data(data_headers_and_dfs_normalized, suffix='_normalized')
 

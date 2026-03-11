@@ -1,0 +1,15 @@
+[theme]
+# Dark Lab theme for FluoroSense - Fluorescence Spectroscopy Analysis
+# Inspired by professional instrumentation software and emission spectra
+
+primaryColor = "#00d4ff"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#1a1d24"
+textColor = "#e4e7eb"
+font = "sans serif"
+
+[server]
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
