@@ -154,4 +154,4 @@ If you use FluoroSense in your research, please cite:
 
 ## Acknowledgments
 
-Developed for protein kinetics research at the [Institute of Bioprocess and Biosystems Engineering](https://www.tuwien.at/tch/icebe/ibdgroup), TU Wien.
+Developed for protein kinetics research at the [Integrated Bioprocess Development (IBD Group)](https://www.tuwien.at/tch/icebe/ibdgroup), Research Area Biochemical Engineering, Institute of Chemical, Environmental and Bioscience Engineering, TU Wien.
