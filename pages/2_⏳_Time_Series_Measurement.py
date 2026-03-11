@@ -1135,6 +1135,141 @@ def plot_batch_aew_grid(runs, cols=3):
     return fig
 
 
+def plot_kinetics_overlay(runs, batch_fit_results, batch_selected_model):
+    """Create overlay plot of AEW data with kinetic fits for all runs"""
+    fig = go.Figure()
+    colors = generate_colors(len(runs))
+
+    for idx, (run_id, run) in enumerate(runs.items()):
+        if run.status != 'complete' or 'augmented_df' not in run.metrics:
+            continue
+        df = run.metrics['augmented_df']
+
+        # Plot AEW data points
+        fig.add_trace(go.Scatter(
+            x=df["Process Time [h]"],
+            y=df["Average emission wavelength [nm]"],
+            mode='markers',
+            name=run.file_name,
+            marker=dict(color=colors[idx], size=8),
+            showlegend=True
+        ))
+
+        # Plot fitted curve if available
+        if run_id in batch_fit_results and batch_fit_results[run_id]['success']:
+            fit = batch_fit_results[run_id]
+            t_data = df['Process Time [h]'].dropna().values
+            t_max = np.nanmax(t_data)
+            t_smooth = np.linspace(0, t_max * 1.1, 200)
+
+            A = fit['parameters']['A']['value']
+            k = fit['parameters']['k']['value']
+            offset_name = fit['offset_name']
+            offset = fit['parameters'][offset_name]['value']
+
+            if fit['model'] == 'decay':
+                y_smooth = exponential_decay(t_smooth, A, k, offset)
+            else:
+                y_smooth = exponential_rise(t_smooth, A, k, offset)
+
+            fig.add_trace(go.Scatter(
+                x=t_smooth,
+                y=y_smooth,
+                mode='lines',
+                name=f"{run.file_name} (fit)",
+                line=dict(color=colors[idx], width=2, dash='solid'),
+                showlegend=False
+            ))
+
+    fig.update_layout(
+        autosize=False, width=width, height=height, template=dark_template,
+        xaxis_title="Process Time [h]", yaxis_title="Average Emission Wavelength [nm]",
+        legend_title="Run"
+    )
+    return fig
+
+
+def plot_kinetics_grid(runs, batch_fit_results, batch_selected_model, cols=3):
+    """Create grid plot of AEW data with kinetic fits for each run"""
+    from plotly.subplots import make_subplots
+
+    complete_runs = [(run_id, run) for run_id, run in runs.items()
+                     if run.status == 'complete' and 'augmented_df' in run.metrics]
+
+    if not complete_runs:
+        return go.Figure()
+
+    n_runs = len(complete_runs)
+    rows = (n_runs + cols - 1) // cols
+    colors = generate_colors(n_runs)
+
+    fig = make_subplots(
+        rows=rows, cols=cols,
+        subplot_titles=[run.file_name for _, run in complete_runs],
+        horizontal_spacing=0.08,
+        vertical_spacing=0.12
+    )
+
+    for idx, (run_id, run) in enumerate(complete_runs):
+        df = run.metrics['augmented_df']
+        row = idx // cols + 1
+        col = idx % cols + 1
+
+        if 'Average emission wavelength [nm]' not in df.columns or 'Process Time [h]' not in df.columns:
+            continue
+
+        time_vals = df['Process Time [h]'].values
+        aew = df['Average emission wavelength [nm]'].values
+
+        mask = ~(np.isnan(aew) | np.isnan(time_vals))
+        aew, time_vals = aew[mask], time_vals[mask]
+
+        if len(aew) == 0:
+            continue
+
+        # AEW data points
+        fig.add_trace(go.Scatter(
+            x=time_vals, y=aew,
+            mode='markers',
+            marker=dict(color=colors[idx], size=6),
+            showlegend=False
+        ), row=row, col=col)
+
+        # Fitted curve if available
+        if run_id in batch_fit_results and batch_fit_results[run_id]['success']:
+            fit = batch_fit_results[run_id]
+            t_max = np.nanmax(time_vals)
+            t_smooth = np.linspace(0, t_max * 1.1, 200)
+
+            A = fit['parameters']['A']['value']
+            k = fit['parameters']['k']['value']
+            offset_name = fit['offset_name']
+            offset = fit['parameters'][offset_name]['value']
+
+            if fit['model'] == 'decay':
+                y_smooth = exponential_decay(t_smooth, A, k, offset)
+            else:
+                y_smooth = exponential_rise(t_smooth, A, k, offset)
+
+            fig.add_trace(go.Scatter(
+                x=t_smooth, y=y_smooth,
+                mode='lines',
+                line=dict(color=colors[idx], width=2),
+                showlegend=False
+            ), row=row, col=col)
+
+        fig.update_xaxes(title_text="Time [h]", row=row, col=col, title_font=dict(size=10))
+        fig.update_yaxes(title_text="AEW [nm]", row=row, col=col, title_font=dict(size=10))
+
+    fig.update_layout(
+        autosize=False,
+        width=width,
+        height=max(height, 280 * rows),
+        template=dark_template
+    )
+    return fig
+
+
 # ============== SESSION STATE ==============
 
 if 'blank_subtraction_applied' not in st.session_state:
@@ -1143,6 +1278,10 @@ if 'batch_runs' not in st.session_state:
     st.session_state['batch_runs'] = {}
 if 'processing_mode' not in st.session_state:
     st.session_state['processing_mode'] = "Single File"
+if 'batch_fit_cache' not in st.session_state:
+    st.session_state['batch_fit_cache'] = {}
+if 'batch_fit_cache_key' not in st.session_state:
+    st.session_state['batch_fit_cache_key'] = None
 
 
 # ============== MAIN APPLICATION ==============
@@ -1262,6 +1401,9 @@ else:
 
         if current_file_names != existing_file_names:
             st.session_state['batch_runs'] = {}
+            # Clear kinetics cache when files change
+            st.session_state['batch_fit_cache'] = {}
+            st.session_state['batch_fit_cache_key'] = None
             progress_bar = st.progress(0)
             status_text = st.empty()
 
@@ -1312,7 +1454,7 @@ else:
         runs = batch_blank_subtraction_ui(runs)
         st.session_state['batch_runs'] = runs
 
-        batch_tabs = st.tabs(["Individual", "AEW Comparison", "Max WL Comparison", "Integral Comparison", "Phase Portraits", "Summary", "Export"])
+        batch_tabs = st.tabs(["Individual", "AEW Comparison", "Max WL Comparison", "Integral Comparison", "Phase Portraits", "Summary", "Export"], key="batch_main_tabs")
 
         with batch_tabs[0]:
             st.header("Individual Run")
@@ -1329,12 +1471,15 @@ else:
         with batch_tabs[1]:
             st.header("AEW Comparison")
 
-            # View mode toggle
+            # View mode toggle - placed at top level so it's always visible
             view_mode = st.radio("View Mode", ["Overlay", "Grid"], horizontal=True, key="aew_view_mode",
                                 help="Overlay: all runs on one plot for comparison\nGrid: individual plots per run")
 
             # Kinetics checkbox for batch mode
             analyze_kinetics_batch = st.checkbox("Analyze Kinetics", value=False, key="batch_kinetics_checkbox")
+
+            # Use a container for the plot to avoid stale rendering
+            plot_container = st.container()
 
             if analyze_kinetics_batch:
                 batch_kinetic_model = st.radio("Model", ["Decay", "Rise"], horizontal=True, key="batch_kinetic_model",
@@ -1342,64 +1487,35 @@ else:
                 st.markdown(f"**Equation:** {'y = A · exp(-k · t) + y∞' if batch_kinetic_model == 'Decay' else 'y = A · (1 - exp(-k · t)) + y₀'}")
                 batch_selected_model = 'decay' if batch_kinetic_model == 'Decay' else 'rise'
 
-                # Fit all runs
-                batch_fit_results = {}
-                for run_id, run in runs.items():
-                    if run.status == 'complete' and 'augmented_df' in run.metrics:
-                        df = run.metrics['augmented_df']
-                        batch_fit_results[run_id] = fit_kinetic_data(df['Process Time [h]'].values,
-                                                                      df['Average emission wavelength [nm]'].values,
-                                                                      model=batch_selected_model)
+                # Create cache key from run data hashes
+                cache_key_data = tuple(
+                    (run_id, run.content_hash if hasattr(run, 'content_hash') else str(hash(str(run.metrics.get('augmented_df', '').head() if 'augmented_df' in run.metrics else ''))))
+                    for run_id, run in runs.items() if run.status == 'complete'
+                )
 
-                # Create comparison plot with AEW data points AND fitted curves
-                fig = go.Figure()
-                colors = generate_colors(len(runs))
+                # Check if we need to recompute fits
+                cache_key = (cache_key_data, batch_selected_model)
+                if 'batch_fit_cache' not in st.session_state or st.session_state.get('batch_fit_cache_key') != cache_key:
+                    batch_fit_results = {}
+                    for run_id, run in runs.items():
+                        if run.status == 'complete' and 'augmented_df' in run.metrics:
+                            df = run.metrics['augmented_df']
+                            batch_fit_results[run_id] = fit_kinetic_data(
+                                df['Process Time [h]'].values,
+                                df['Average emission wavelength [nm]'].values,
+                                model=batch_selected_model
+                            )
+                    st.session_state['batch_fit_cache'] = batch_fit_results
+                    st.session_state['batch_fit_cache_key'] = cache_key
+                else:
+                    batch_fit_results = st.session_state['batch_fit_cache']
 
-                for idx, (run_id, run) in enumerate(runs.items()):
-                    if run.status != 'complete' or 'augmented_df' not in run.metrics:
-                        continue
-                    df = run.metrics['augmented_df']
-
-                    # Plot AEW data points
-                    fig.add_trace(go.Scatter(
-                        x=df["Process Time [h]"],
-                        y=df["Average emission wavelength [nm]"],
-                        mode='markers',
-                        name=run.file_name,
-                        marker=dict(color=colors[idx], size=8),
-                        showlegend=True
-                    ))
-
-                    # Plot fitted curve if available
-                    if run_id in batch_fit_results and batch_fit_results[run_id]['success']:
-                        fit = batch_fit_results[run_id]
-                        t_data = df['Process Time [h]'].dropna().values
-                        t_max = np.nanmax(t_data)
-                        t_smooth = np.linspace(0, t_max * 1.1, 200)
-
-                        A = fit['parameters']['A']['value']
-                        k = fit['parameters']['k']['value']
-                        offset_name = fit['offset_name']
-                        offset = fit['parameters'][offset_name]['value']
-
-                        if fit['model'] == 'decay':
-                            y_smooth = exponential_decay(t_smooth, A, k, offset)
-                        else:
-                            y_smooth = exponential_rise(t_smooth, A, k, offset)
-
-                        fig.add_trace(go.Scatter(
-                            x=t_smooth,
-                            y=y_smooth,
-                            mode='lines',
-                            name=f"{run.file_name} (fit)",
-                            line=dict(color=colors[idx], width=2, dash='solid'),
-                            showlegend=False
-                        ))
-
-                fig.update_layout(autosize=False, width=width, height=height, template=dark_template,
-                                 xaxis_title="Process Time [h]", yaxis_title="Average Emission Wavelength [nm]",
-                                 legend_title="Run")
-                st.plotly_chart(fig, width='stretch', config=config)
+                # Show plot based on view mode (respect the selection)
+                with plot_container:
+                    if view_mode == "Overlay":
+                        st.plotly_chart(plot_kinetics_overlay(runs, batch_fit_results, batch_selected_model), width='stretch', config=config)
+                    else:
+                        st.plotly_chart(plot_kinetics_grid(runs, batch_fit_results, batch_selected_model), width='stretch', config=config)
 
                 # Show summary table of kinetic parameters
                 st.subheader("Kinetic Parameters Summary")
@@ -1428,10 +1544,11 @@ else:
                             st.error(f"Failed: {fit.get('error')}")
             else:
                 # Show AEW comparison based on view mode
-                if view_mode == "Overlay":
-                    st.plotly_chart(plot_batch_comparison(runs, "Average emission wavelength [nm]"), width='stretch', config=config)
-                else:
-                    st.plotly_chart(plot_batch_aew_grid(runs), width='stretch', config=config)
+                with plot_container:
+                    if view_mode == "Overlay":
+                        st.plotly_chart(plot_batch_comparison(runs, "Average emission wavelength [nm]"), width='stretch', config=config)
+                    else:
+                        st.plotly_chart(plot_batch_aew_grid(runs), width='stretch', config=config)
 
         with batch_tabs[2]:
             st.header("Max Wavelength Comparison")

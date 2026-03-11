@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use FluoroSense in your research, please cite it as below."
+title: "FluoroSense"
+version: 0.1.0
+date-released: 2024-10-01
+url: "https://github.com/floriangisperg/fluorosense"
+authors:
+  - family-names: Gisperg
+    given-names: Florian
+    affiliation: TU Wien
+    orcid: https://orcid.org/0000-0000-0000-0000
+description: "A Streamlit-based web application for analyzing fluorescence spectroscopy data from Jasco spectrofluorometer instruments."
+keywords:
+  - fluorescence spectroscopy
+  - protein folding
+  - biophysics
+  - streamlit
+  - data analysis
+  - jasco
+license: Unlicense
+repository-code: "https://github.com/floriangisperg/fluorosense"

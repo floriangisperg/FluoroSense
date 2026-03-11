@@ -76,23 +76,28 @@ yarn-error.log*
 *.swp
 *.swo
 
-# Ignore Markdown files except README.md
+# Ignore Markdown files except README.md and CITATION
 *.md
 !README.md
+!CITATION.cff
 
-# Specific files to ignore
+# AI Assistant files
 agents.md
 claude.md
-
+.claude/
 
 # Dev containers
 .devcontainer/
 .devcontainer.json
 
-
-# OpenSpec
+# OpenSpec (development tooling)
 openspec/
 
-# Data
+# IDE
+.idea/
+
+# Data (user data should not be committed)
 data/
+*.xlsx
+*.xls
 
