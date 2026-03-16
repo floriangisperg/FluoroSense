@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
     page_title="FluoroSense",
     page_icon="🔬",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Import and apply theme
