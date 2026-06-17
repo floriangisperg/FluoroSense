@@ -20,7 +20,12 @@ import plotly.graph_objects as go
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
-from scipy.integrate import simpson
+from fluorosense.io import as_individual_spectrum, parse_jasco_rawdata, parse_warnings
+from fluorosense.metrics import (
+    calculate_single_spectrum_aew,
+    calculate_single_spectrum_integral,
+    filter_single_spectrum_range,
+)
 
 # Plot settings - Dark Lab theme
 width = 1200
@@ -51,47 +56,17 @@ dark_template = get_plotly_dark_template()
 
 
 def upload_jasco_rawdata(uploaded_file):
-    header = {}
-    xydata = []
-    extended_info = {}
+    result = parse_jasco_rawdata(uploaded_file, getattr(uploaded_file, "name", None))
+    return result.header, as_individual_spectrum(result.data), result.extended_info
 
-    lines = uploaded_file.readlines()
-    mode = 'header'
-    for line in lines:
-        line = line.decode().strip()
-        if line.startswith('XYDATA'):
-            mode = 'data'
-            continue
-        if line == '##### Extended Information':
-            mode = 'extended'
-            continue
-        if mode == 'header':
-            key, value = line.split(',', 1)
-            header[key] = value.rstrip(',')
-        elif mode == 'data':
-            if not line.startswith('#####'):
-                fields = line.split(',')
-                xydata.append(fields)
-            else:
-                mode = 'extended'
-        elif mode == 'extended':
-            if ',' in line:
-                key, value = line.split(',', 1)
-                extended_info[key.strip()] = value.strip()
 
-    if xydata:
-        df = pd.DataFrame(xydata[1:], columns=xydata[0])
-        for col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        try:
-            df.set_index('', inplace=True)
-        except:
-            df = df.iloc[:-1]
-            df.columns = ["Wavelength [nm]", "Intensity"]
-    else:
-        df = pd.DataFrame()
+def show_parse_warnings(warnings, file_name=None):
+    if not warnings:
+        return
 
-    return header, df, extended_info
+    label = file_name or "Current file"
+    warning_text = "\n".join(f"- {warning}" for warning in warnings)
+    st.sidebar.warning(f"{label}\n\n{warning_text}")
 
 
 def single_measurement_df_to_txt(df, header, suffix=''):
@@ -108,16 +83,17 @@ def subtract_blank(sample_df, blank_df):
     if blank_df.empty:
         return sample_df
     corrected_df = sample_df.copy()
-    corrected_df['Intensity'] = sample_df['Intensity'] - blank_df['Intensity'].values
+    blank_series = blank_df.set_index("Wavelength [nm]")["Intensity"]
+    sample_wavelengths = corrected_df["Wavelength [nm]"]
+    aligned_blank = sample_wavelengths.map(blank_series)
+    corrected_df['Intensity'] = corrected_df['Intensity'] - aligned_blank
+    corrected_df = corrected_df.dropna(subset=["Intensity"])
     return corrected_df
 
 
 @st.cache_data
 def calculate_avg_emission_wavelength(df):
-    weighted_sum = np.sum(df["Wavelength [nm]"] * df["Intensity"])
-    total_intensity = np.sum(df["Intensity"])
-    avg_emission_wavelength = weighted_sum / total_intensity
-    return avg_emission_wavelength
+    return calculate_single_spectrum_aew(df)
 
 
 def download_data(data_headers_and_dfs, suffix=''):
@@ -143,7 +119,65 @@ def normalize(df):
 
 
 def calculate_integral(df):
-    return simpson(df["Intensity"], df["Wavelength [nm]"])
+    return calculate_single_spectrum_integral(df)
+
+
+def spectral_range_ui(data_headers_and_dfs):
+    if not data_headers_and_dfs:
+        return data_headers_and_dfs
+
+    valid_dfs = [df for _, df, _ in data_headers_and_dfs if not df.empty]
+    if not valid_dfs:
+        return data_headers_and_dfs
+
+    min_wavelength = max(df["Wavelength [nm]"].min() for df in valid_dfs)
+    max_wavelength = min(df["Wavelength [nm]"].max() for df in valid_dfs)
+    if pd.isna(min_wavelength) or pd.isna(max_wavelength) or min_wavelength >= max_wavelength:
+        st.sidebar.warning("No shared spectral range is available.")
+        return data_headers_and_dfs
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Spectral Range")
+    st.sidebar.caption(f"Available shared range: {min_wavelength:g}-{max_wavelength:g} nm")
+    use_custom_range = st.sidebar.checkbox("Limit spectral range", value=False, key="individual_limit_range")
+
+    if not use_custom_range:
+        return data_headers_and_dfs
+
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        selected_min = st.number_input(
+            "From",
+            min_value=float(min_wavelength),
+            max_value=float(max_wavelength),
+            value=float(min_wavelength),
+            step=0.5,
+            key="individual_range_min",
+        )
+    with col2:
+        selected_max = st.number_input(
+            "To",
+            min_value=float(min_wavelength),
+            max_value=float(max_wavelength),
+            value=float(max_wavelength),
+            step=0.5,
+            key="individual_range_max",
+        )
+
+    if selected_min >= selected_max:
+        st.sidebar.warning("Range start must be smaller than range end.")
+        return data_headers_and_dfs
+
+    filtered = [
+        (header, filter_single_spectrum_range(df, selected_min, selected_max), extended_info)
+        for header, df, extended_info in data_headers_and_dfs
+    ]
+    point_counts = [len(df) for _, df, _ in filtered]
+    if point_counts and min(point_counts) < 2:
+        st.sidebar.warning("Selected range contains fewer than 2 points for at least one spectrum.")
+    else:
+        st.sidebar.caption(f"Using: {selected_min:g}-{selected_max:g} nm")
+    return filtered
 
 
 def plot_data(data_headers_and_dfs):
@@ -222,16 +256,19 @@ def main():
     blank_header, blank_df, blank_extended_info = (None, pd.DataFrame(), None)
     if blank_file is not None:
         blank_header, blank_df, blank_extended_info = upload_jasco_rawdata(blank_file)
+        show_parse_warnings(parse_warnings(blank_df), blank_file.name)
 
     # Process the sample files
     data_headers_and_dfs = []
     for file in uploaded_files:
         header, df, extended_info = upload_jasco_rawdata(file)
+        show_parse_warnings(parse_warnings(df), file.name)
         if use_blank:
             df = subtract_blank(df, blank_df)
         data_headers_and_dfs.append((header, df, extended_info))
 
     if data_headers_and_dfs:
+        data_headers_and_dfs = spectral_range_ui(data_headers_and_dfs)
         # Check for duplicate headers
         titles = [header['TITLE'] for header, df, extended_info in data_headers_and_dfs]
         if len(titles) != len(set(titles)):

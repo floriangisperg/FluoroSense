@@ -119,6 +119,39 @@ def apply_dark_lab_theme():
         -webkit-text-fill-color: var(--text-primary);
     }
 
+    .spectrum-warning {
+        margin: 0.75rem 0 1rem;
+        padding: 0.75rem;
+        border: 1px solid rgba(251, 191, 36, 0.55);
+        border-radius: var(--radius-sm);
+        background: rgba(251, 191, 36, 0.08);
+        color: var(--text-primary);
+        font-size: 0.82rem;
+        line-height: 1.35;
+    }
+
+    .spectrum-warning-title {
+        color: var(--accent-amber);
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+
+    .spectrum-warning-file {
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        word-break: break-word;
+        margin-bottom: 0.35rem;
+    }
+
+    .spectrum-warning ul {
+        margin: 0;
+        padding-left: 1rem;
+    }
+
+    .spectrum-warning li {
+        margin: 0.15rem 0;
+    }
+
     /* ---- Cards & Containers ---- */
     .stContainer > div {
         background: var(--bg-card);
@@ -572,7 +605,9 @@ def apply_dark_lab_theme():
     /* ---- Hide Streamlit Branding ---- */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    header[data-testid="stHeader"] {
+        background: transparent;
+    }
 
     /* ---- Print Styles ---- */
     @media print {
