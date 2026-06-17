@@ -30,7 +30,7 @@ import colorsys
 import hashlib
 import json
 import html
-from fluorosense.io import parse_jasco_rawdata, parse_warnings
+from fluorosense.io import parse_spectral_file, parse_warnings
 from fluorosense.metrics import (
     AEW_COLUMN,
     INTEGRAL_COLUMN,
@@ -141,7 +141,7 @@ config = {
 @st.cache_data
 def upload_jasco_rawdata(uploaded_file):
     """Parse Jasco raw data files"""
-    result = parse_jasco_rawdata(uploaded_file, getattr(uploaded_file, "name", None))
+    result = parse_spectral_file(uploaded_file, getattr(uploaded_file, "name", None))
     return result.header, result.data, result.extended_info
 
 
@@ -1309,7 +1309,7 @@ st.session_state['processing_mode'] = processing_mode
 
 if processing_mode == "Single File":
     with st.expander("Upload file here"):
-        uploaded_file = st.sidebar.file_uploader("Choose CSV file", key="single")
+        uploaded_file = st.sidebar.file_uploader("Choose raw data or FluoroSense export file", key="single")
 
     if uploaded_file:
         header, df, extended_info = upload_jasco_rawdata(uploaded_file)
@@ -1415,7 +1415,11 @@ if processing_mode == "Single File":
 else:
     # Batch mode
     with st.expander("Upload files"):
-        uploaded_files = st.sidebar.file_uploader("Choose CSV files", accept_multiple_files=True, key="batch")
+        uploaded_files = st.sidebar.file_uploader(
+            "Choose raw data or FluoroSense export files",
+            accept_multiple_files=True,
+            key="batch",
+        )
 
     if uploaded_files:
         current_file_names = {f.name for f in uploaded_files}
