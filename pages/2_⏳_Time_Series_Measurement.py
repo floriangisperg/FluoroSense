@@ -16,7 +16,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from scipy.integrate import simpson
 from scipy.optimize import curve_fit
 from scipy.stats import t
 import io
@@ -30,6 +29,22 @@ from typing import Dict, Optional, List
 import colorsys
 import hashlib
 import json
+import html
+from fluorosense.io import parse_jasco_rawdata, parse_warnings
+from fluorosense.metrics import (
+    AEW_COLUMN,
+    INTEGRAL_COLUMN,
+    MAX_WAVELENGTH_COLUMN,
+    SPECTRAL_WIDTH_COLUMN,
+    augment_dataframe as build_augmented_dataframe,
+    calculate_avg_emission_wavelength as compute_avg_emission_wavelength,
+    calculate_integrals as compute_integrals,
+    calculate_max_emission_wavelength as compute_max_emission_wavelength,
+    calculate_spectral_width as compute_spectral_width,
+    coerce_time_series_data,
+    filter_spectral_range,
+    spectral_range,
+)
 
 def compute_content_hash(file_content: bytes) -> str:
     """Compute SHA256 hash of file content for caching"""
@@ -82,7 +97,18 @@ class TimeSeriesRun:
     processed_df: Optional[pd.DataFrame] = None
     blank_config: dict = field(default_factory=dict)
     metrics: dict = field(default_factory=dict)
+    parse_warnings: list = field(default_factory=list)
+    analysis_range: Optional[tuple] = None
     status: str = 'pending'
+
+
+def ensure_run_defaults(run):
+    """Populate fields added after older Streamlit session objects were created."""
+    if not hasattr(run, "analysis_range"):
+        run.analysis_range = None
+    if not hasattr(run, "parse_warnings"):
+        run.parse_warnings = []
+    return run
 
 
 # plot settings - Dark Lab theme
@@ -115,114 +141,68 @@ config = {
 @st.cache_data
 def upload_jasco_rawdata(uploaded_file):
     """Parse Jasco raw data files"""
-    header = {}
-    xydata = []
-    extended_info = {}
+    result = parse_jasco_rawdata(uploaded_file, getattr(uploaded_file, "name", None))
+    return result.header, result.data, result.extended_info
 
-    lines = uploaded_file.readlines()
-    mode = 'header'
-    data_started = False
-    data_ended = False
 
-    for line in lines:
-        line = line.decode().strip()
+def get_parse_warnings(df):
+    """Return parser warnings attached to a dataframe."""
+    return parse_warnings(df)
 
-        if line.startswith('XYDATA'):
-            mode = 'data'
-            data_started = False
-            continue
 
-        if line.startswith('##### Extended Information'):
-            mode = 'extended'
-            data_ended = True
-            continue
+def show_parse_warnings(warnings, file_name=None):
+    """Display compact parser warnings in the sidebar."""
+    if not warnings:
+        return
 
-        if mode == 'header':
-            if ',' in line:
-                parts = line.split(',', 1)
-                if len(parts) == 2:
-                    key, value = parts
-                    header[key] = value.rstrip(',')
+    label = html.escape(file_name) if file_name else "Current file"
+    items = "".join(f"<li>{html.escape(warning)}</li>" for warning in warnings)
+    st.sidebar.markdown(
+        f"""
+        <div class="spectrum-warning">
+            <div class="spectrum-warning-title">Spectrum warning</div>
+            <div class="spectrum-warning-file">{label}</div>
+            <ul>{items}</ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        elif mode == 'data':
-            if not line or line.isspace():
-                continue
-            if line.startswith('#####'):
-                mode = 'extended'
-                data_ended = True
-                continue
-            if not data_started and ',' in line and not line.startswith('#'):
-                data_started = True
-                xydata.append(line.split(','))
-                continue
-            if data_started and not data_ended:
-                fields = line.split(',')
-                if len(fields) >= 2:
-                    xydata.append(fields)
 
-        elif mode == 'extended':
-            if ',' in line:
-                parts = line.split(',', 1)
-                if len(parts) == 2:
-                    key, value = parts
-                    extended_info[key.strip()] = value.strip()
-
-    if xydata and len(xydata) > 1:
-        try:
-            df = pd.DataFrame(xydata[1:], columns=xydata[0])
-            for col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            try:
-                if '' in df.columns:
-                    df.set_index('', inplace=True)
-                elif df.columns[0].strip() == '':
-                    df.set_index(df.columns[0], inplace=True)
-            except:
-                pass
-            df = df.dropna(how='all')
-        except Exception as e:
-            st.error(f"Error processing data: {str(e)}")
-            df = pd.DataFrame()
-    else:
-        df = pd.DataFrame()
-
-    return header, df, extended_info
+def show_batch_parse_warnings(runs):
+    """Display parse warnings for loaded batch files."""
+    for run in runs.values():
+        show_parse_warnings(getattr(run, 'parse_warnings', []), run.file_name)
 
 
 def subtract_blank_from_time_series(df, blank_method='timepoint', blank_timepoint=None, blank_start=None, blank_end=None):
     """Subtract blank spectrum from time series"""
     result_df = df.copy()
 
-    try:
-        if blank_method == 'timepoint' and blank_timepoint:
-            if blank_timepoint in result_df.columns:
-                blank_spectrum = result_df[blank_timepoint]
-            else:
-                return df
-        elif blank_method == 'average' and blank_start and blank_end:
-            column_options = df.columns.tolist()
-            try:
-                start_idx = column_options.index(blank_start)
-                end_idx = column_options.index(blank_end)
-                if start_idx > end_idx:
-                    start_idx, end_idx = end_idx, start_idx
-                cols_between = column_options[start_idx:(end_idx + 1)]
-                if cols_between:
-                    blank_spectrum = result_df[cols_between].mean(axis=1)
-                else:
-                    return df
-            except:
-                return df
-        else:
+    if blank_method == 'timepoint' and blank_timepoint:
+        if blank_timepoint not in result_df.columns:
             return df
-
-        for col in result_df.columns:
-            result_df[col] = result_df[col] - blank_spectrum
-
-        st.session_state['blank_subtraction_applied'] = True
-        return result_df
-    except:
+        blank_spectrum = result_df[blank_timepoint]
+    elif blank_method == 'average' and blank_start and blank_end:
+        column_options = df.columns.tolist()
+        if blank_start not in column_options or blank_end not in column_options:
+            return df
+        start_idx = column_options.index(blank_start)
+        end_idx = column_options.index(blank_end)
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
+        cols_between = column_options[start_idx:(end_idx + 1)]
+        if not cols_between:
+            return df
+        blank_spectrum = result_df[cols_between].mean(axis=1)
+    else:
         return df
+
+    for col in result_df.columns:
+        result_df[col] = result_df[col] - blank_spectrum
+
+    st.session_state['blank_subtraction_applied'] = True
+    return result_df
 
 
 def blank_subtraction_ui(df):
@@ -317,140 +297,161 @@ def batch_blank_subtraction_ui(runs):
     return runs
 
 
+def spectral_range_ui(df, key_prefix):
+    """Sidebar control for limiting the spectral range of one dataframe."""
+    min_wavelength, max_wavelength, point_count = spectral_range(df)
+    if min_wavelength is None or max_wavelength is None:
+        st.sidebar.warning("No spectral range is available.")
+        return df, None
+
+    st.sidebar.markdown("## Spectral Range")
+    st.sidebar.caption(f"Available: {min_wavelength:g}-{max_wavelength:g} nm ({point_count} points)")
+    use_custom_range = st.sidebar.checkbox("Limit spectral range", value=False, key=f"{key_prefix}_limit_range")
+
+    if not use_custom_range:
+        return df, None
+
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        selected_min = st.number_input(
+            "From",
+            min_value=float(min_wavelength),
+            max_value=float(max_wavelength),
+            value=float(min_wavelength),
+            step=0.5,
+            key=f"{key_prefix}_range_min",
+        )
+    with col2:
+        selected_max = st.number_input(
+            "To",
+            min_value=float(min_wavelength),
+            max_value=float(max_wavelength),
+            value=float(max_wavelength),
+            step=0.5,
+            key=f"{key_prefix}_range_max",
+        )
+
+    if selected_min >= selected_max:
+        st.sidebar.warning("Range start must be smaller than range end.")
+        return df, None
+
+    filtered_df = filter_spectral_range(df, selected_min, selected_max)
+    filtered_min, filtered_max, filtered_count = spectral_range(filtered_df)
+    if filtered_count < 2:
+        st.sidebar.warning("Selected range contains fewer than 2 wavelength points.")
+        return df, None
+
+    st.sidebar.caption(f"Using: {filtered_min:g}-{filtered_max:g} nm ({filtered_count} points)")
+    return filtered_df, (float(selected_min), float(selected_max))
+
+
+def common_spectral_range(runs):
+    """Return the shared available wavelength range across all batch runs."""
+    bounds = []
+    for run in runs.values():
+        df = run.processed_df if run.processed_df is not None else run.raw_df
+        min_wavelength, max_wavelength, point_count = spectral_range(df)
+        if point_count:
+            bounds.append((min_wavelength, max_wavelength))
+
+    if not bounds:
+        return None, None
+
+    return max(item[0] for item in bounds), min(item[1] for item in bounds)
+
+
+def batch_spectral_range_ui(runs):
+    """Sidebar control for applying one spectral range to all batch runs."""
+    if not runs:
+        return runs
+
+    for run_id, run in runs.items():
+        runs[run_id] = ensure_run_defaults(run)
+
+    min_wavelength, max_wavelength = common_spectral_range(runs)
+    if min_wavelength is None or max_wavelength is None:
+        st.sidebar.warning("No shared spectral range is available.")
+        return runs
+    if min_wavelength >= max_wavelength:
+        st.sidebar.warning("Batch files have no overlapping spectral range.")
+        return runs
+
+    st.sidebar.markdown("## Spectral Range")
+    st.sidebar.caption(f"Shared range: {min_wavelength:g}-{max_wavelength:g} nm")
+    use_custom_range = st.sidebar.checkbox("Limit spectral range", value=False, key="batch_limit_range")
+    selected_range = None
+
+    if use_custom_range:
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            selected_min = st.number_input(
+                "From",
+                min_value=float(min_wavelength),
+                max_value=float(max_wavelength),
+                value=float(min_wavelength),
+                step=0.5,
+                key="batch_range_min",
+            )
+        with col2:
+            selected_max = st.number_input(
+                "To",
+                min_value=float(min_wavelength),
+                max_value=float(max_wavelength),
+                value=float(max_wavelength),
+                step=0.5,
+                key="batch_range_max",
+            )
+        if selected_min >= selected_max:
+            st.sidebar.warning("Range start must be smaller than range end.")
+            return runs
+        selected_range = (float(selected_min), float(selected_max))
+        st.sidebar.caption(f"Using: {selected_min:g}-{selected_max:g} nm")
+
+    changed = False
+    for run_id, run in runs.items():
+        if getattr(run, "analysis_range", None) != selected_range:
+            run.analysis_range = selected_range
+            runs[run_id] = process_single_run(run)
+            changed = True
+
+    if changed:
+        st.session_state['batch_fit_cache'] = {}
+        st.session_state['batch_fit_cache_key'] = None
+
+    return runs
+
+
 def preprocess_time_series_data(df):
     """Clean time series data"""
-    if df.empty:
-        return df
-
-    numeric_cols = df.dtypes[df.dtypes.apply(lambda x: pd.api.types.is_numeric_dtype(x))].index
-    numeric_df = df[numeric_cols]
-
-    if numeric_df.empty:
-        for col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        numeric_df = df.select_dtypes(include=['number'])
-
-    try:
-        numeric_df.index = pd.to_numeric(numeric_df.index, errors='coerce')
-    except:
-        pass
-
-    numeric_df = numeric_df.dropna(how='all')
-    numeric_df = numeric_df.dropna(axis=1, how='all')
-
+    numeric_df, warnings = coerce_time_series_data(df)
+    for warning in warnings:
+        st.sidebar.warning(warning, icon="⚠️")
     return numeric_df
 
 
 def calculate_integrals(df):
     """Calculate integrals"""
-    try:
-        numeric_df = df.select_dtypes(include=['number'])
-        if numeric_df.empty:
-            return pd.Series(dtype=float)
-
-        if not pd.api.types.is_numeric_dtype(numeric_df.index):
-            numeric_df.index = pd.to_numeric(numeric_df.index, errors='coerce')
-        numeric_df = numeric_df.sort_index().dropna(how='all')
-
-        return numeric_df.apply(lambda col: simpson(col, x=numeric_df.index), axis=0)
-    except:
-        return pd.Series(dtype=float)
+    return compute_integrals(df)
 
 
 def calculate_avg_emission_wavelength(df):
     """Calculate AEW"""
-    try:
-        numeric_df = df.select_dtypes(include=['number'])
-        if numeric_df.empty:
-            return []
-
-        if not pd.api.types.is_numeric_dtype(numeric_df.index):
-            numeric_df.index = pd.to_numeric(numeric_df.index, errors='coerce')
-        numeric_df = numeric_df.sort_index().dropna(how='all')
-
-        avg_emission_wavelength = []
-        for col in numeric_df.columns:
-            if (numeric_df[col] <= 0).all():
-                avg_emission_wavelength.append(np.nan)
-                continue
-            weighted_sum = np.sum(numeric_df.index * numeric_df[col])
-            total_intensity = np.sum(numeric_df[col])
-            avg_emission_wavelength.append(weighted_sum / total_intensity if total_intensity > 0 else np.nan)
-
-        return avg_emission_wavelength
-    except:
-        return []
+    return compute_avg_emission_wavelength(df)
 
 
 def calculate_max_emission_wavelength(df):
     """Find max wavelength"""
-    try:
-        numeric_df = df.select_dtypes(include=['number'])
-        if numeric_df.empty:
-            return []
-
-        if not pd.api.types.is_numeric_dtype(numeric_df.index):
-            numeric_df.index = pd.to_numeric(numeric_df.index, errors='coerce')
-        numeric_df = numeric_df.sort_index().dropna(how='all')
-
-        return [numeric_df.index[np.argmax(numeric_df[col])] for col in numeric_df.columns]
-    except:
-        return []
+    return compute_max_emission_wavelength(df)
 
 
 def calculate_spectral_width(df, avg_emission_wavelength):
     """Calculate spectral width (weighted standard deviation) for each spectrum"""
-    try:
-        numeric_df = df.select_dtypes(include=['number'])
-        if numeric_df.empty:
-            return []
-
-        if not pd.api.types.is_numeric_dtype(numeric_df.index):
-            numeric_df.index = pd.to_numeric(numeric_df.index, errors='coerce')
-        numeric_df = numeric_df.sort_index().dropna(how='all')
-
-        wavelengths = numeric_df.index.values
-        widths = []
-
-        for i, col in enumerate(numeric_df.columns):
-            spectrum = numeric_df[col].values
-            aew = avg_emission_wavelength[i] if i < len(avg_emission_wavelength) else np.nan
-
-            if np.isnan(aew) or np.sum(spectrum) <= 0:
-                widths.append(np.nan)
-                continue
-
-            # Weighted standard deviation: sqrt(sum(I * (wl - aew)^2) / sum(I))
-            weighted_var = np.sum(spectrum * (wavelengths - aew) ** 2) / np.sum(spectrum)
-            widths.append(np.sqrt(weighted_var))
-
-        return widths
-    except:
-        return []
+    return compute_spectral_width(df, avg_emission_wavelength)
 
 
 def augment_dataframe(df, avg_emission_wavelength, integrals, max_emission_wavelength, spectral_width):
     """Combine metrics into dataframe"""
-    try:
-        df_transposed = df.transpose()
-        df_transposed_aew_integral = df_transposed.copy()
-        df_transposed_aew_integral["Average emission wavelength [nm]"] = avg_emission_wavelength
-        df_transposed_aew_integral["Integral"] = integrals
-        df_transposed_aew_integral["Max emission wavelength [nm]"] = max_emission_wavelength
-        df_transposed_aew_integral["Spectral width [nm]"] = spectral_width
-        df_transposed_aew_integral.reset_index(inplace=True)
-        df_transposed_aew_integral.rename(columns={df_transposed_aew_integral.columns[0]: "Process Time [min]"}, inplace=True)
-
-        try:
-            df_transposed_aew_integral["Process Time [min]"] = pd.to_numeric(df_transposed_aew_integral["Process Time [min]"], errors='coerce')
-        except:
-            df_transposed_aew_integral["Process Time [min]"] = range(len(df_transposed_aew_integral))
-
-        df_transposed_aew_integral["Process Time [h]"] = round(df_transposed_aew_integral["Process Time [min]"] / 60, 3)
-
-        return df_transposed, df_transposed_aew_integral
-    except:
-        return pd.DataFrame(), pd.DataFrame()
+    return build_augmented_dataframe(df, avg_emission_wavelength, integrals, max_emission_wavelength, spectral_width)
 
 
 def closest_times(df, interval):
@@ -464,7 +465,7 @@ def closest_times(df, interval):
             if idx not in closest_indices:
                 closest_indices.append(idx)
         return df.iloc[closest_indices]
-    except:
+    except (KeyError, ValueError, TypeError, IndexError):
         return df
 
 
@@ -554,7 +555,7 @@ def fit_kinetic_data(time_data, y_data, model='decay'):
             'r_squared': r_squared,
             'fitted_curve': {'t': t_clean, 'y_pred': y_pred}
         }
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, FloatingPointError) as e:
         return {'success': False, 'error': str(e)}
 
 
@@ -678,7 +679,15 @@ def generate_colors(n):
 def process_single_run(run):
     """Process a single run"""
     try:
+        run = ensure_run_defaults(run)
         df = run.processed_df if run.processed_df is not None else run.raw_df
+        analysis_range = getattr(run, "analysis_range", None)
+        if analysis_range is not None:
+            df = filter_spectral_range(df, analysis_range[0], analysis_range[1])
+
+        _, _, point_count = spectral_range(df)
+        if point_count < 2:
+            raise ValueError("Selected spectral range contains fewer than 2 wavelength points.")
 
         integrals = calculate_integrals(df)
         avg_emission_wavelength = calculate_avg_emission_wavelength(df)
@@ -692,11 +701,13 @@ def process_single_run(run):
             'integral': integrals,
             'spectral_width': spectral_width,
             'augmented_df': df_augmented,
-            'df_transposed': df_transposed
+            'df_transposed': df_transposed,
+            'analysis_range': analysis_range,
         }
         run.status = 'complete'
-    except Exception as e:
+    except (KeyError, ValueError, TypeError, IndexError) as e:
         run.status = 'error'
+        run.metrics = {'error': str(e)}
 
     return run
 
@@ -732,7 +743,7 @@ def plot_intensity(df, interval=None):
         fig.update_layout(width=width, height=height, template=dark_template,
                          xaxis_title="Wavelength [nm]", yaxis_title="Intensity", legend_title="Process Time [h]")
         return fig
-    except:
+    except (KeyError, ValueError, TypeError, IndexError):
         return go.Figure()
 
 
@@ -759,7 +770,7 @@ def plot_contour(df):
         fig.update_layout(autosize=False, width=width, height=height, template=dark_template,
                          xaxis_title='Wavelength [nm]', yaxis_title='Time')
         return fig
-    except:
+    except (ValueError, TypeError):
         return go.Figure()
 
 
@@ -812,7 +823,7 @@ def save_batch_to_excel(runs):
     """Save batch to Excel"""
     try:
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             summary_df = create_batch_metrics_summary(runs)
             if not summary_df.empty:
                 summary_df.to_excel(writer, sheet_name='Summary', index=False)
@@ -826,7 +837,8 @@ def save_batch_to_excel(runs):
 
         output.seek(0)
         return output.getvalue()
-    except:
+    except (OSError, ValueError, TypeError) as exc:
+        st.error(f"Batch Excel export failed: {exc}")
         return b''
 
 
@@ -879,6 +891,11 @@ def export_tidy_csv_with_provenance(runs, analysis_params: dict = None):
     for run_id, run in runs.items():
         if run.blank_config:
             provenance_lines.append(f"#   {run.file_name}: {run.blank_config}")
+    provenance_lines.append("# Spectral Range Config:")
+    for run_id, run in runs.items():
+        analysis_range = getattr(run, "analysis_range", None)
+        range_label = f"{analysis_range[0]:g}-{analysis_range[1]:g} nm" if analysis_range else "full"
+        provenance_lines.append(f"#   {run.file_name}: {range_label}")
 
     provenance_header = "\n".join(provenance_lines) + "\n\n"
 
@@ -888,14 +905,16 @@ def export_tidy_csv_with_provenance(runs, analysis_params: dict = None):
 def save_to_excel(header, df):
     """Save single file to Excel"""
     try:
-        header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Data', index=False)
-            header_df.to_excel(writer, sheet_name='Info')
+            if header:
+                header_df = pd.DataFrame.from_dict(header, orient='index', columns=['Value'])
+                header_df.to_excel(writer, sheet_name='Info')
         output.seek(0)
         return output.getvalue()
-    except:
+    except (OSError, ValueError, TypeError) as e:
+        st.error(f"Excel export failed: {e}")
         return b''
 
 
@@ -906,7 +925,7 @@ def df_to_txt(df, y_column):
         str_io = StringIO()
         df_subset.to_csv(str_io, sep='\t', index=False)
         return str_io.getvalue()
-    except:
+    except (KeyError, ValueError, TypeError):
         return ""
 
 
@@ -919,13 +938,13 @@ def plot_phase_portrait(df):
             return go.Figure()
 
         aew = df['Average emission wavelength [nm]'].values
-        width = df['Spectral width [nm]'].values
+        spectral_width = df['Spectral width [nm]'].values
         time = df['Process Time [h]'].values
 
         # Remove NaN values
-        mask = ~(np.isnan(aew) | np.isnan(width) | np.isnan(time))
+        mask = ~(np.isnan(aew) | np.isnan(spectral_width) | np.isnan(time))
         aew = aew[mask]
-        width = width[mask]
+        spectral_width = spectral_width[mask]
         time = time[mask]
 
         if len(aew) == 0:
@@ -935,7 +954,7 @@ def plot_phase_portrait(df):
 
         # Line connecting points
         fig.add_trace(go.Scatter(
-            x=aew, y=width,
+            x=aew, y=spectral_width,
             mode='lines',
             line=dict(color='rgba(0,0,0,0.2)', width=1),
             showlegend=False,
@@ -944,7 +963,7 @@ def plot_phase_portrait(df):
 
         # Scatter points colored by time
         fig.add_trace(go.Scatter(
-            x=aew, y=width,
+            x=aew, y=spectral_width,
             mode='markers',
             marker=dict(
                 size=8,
@@ -960,7 +979,7 @@ def plot_phase_portrait(df):
 
         # Start marker (green)
         fig.add_trace(go.Scatter(
-            x=[aew[0]], y=[width[0]],
+            x=[aew[0]], y=[spectral_width[0]],
             mode='markers',
             marker=dict(size=12, color='green', symbol='circle'),
             name='Start',
@@ -969,7 +988,7 @@ def plot_phase_portrait(df):
 
         # End marker (red)
         fig.add_trace(go.Scatter(
-            x=[aew[-1]], y=[width[-1]],
+            x=[aew[-1]], y=[spectral_width[-1]],
             mode='markers',
             marker=dict(size=12, color='red', symbol='circle'),
             name='End',
@@ -977,7 +996,6 @@ def plot_phase_portrait(df):
         ))
 
         # Invert x-axis so higher AEW is on the left (folding goes left-to-right)
-        aew_range = max(aew) - min(aew)
         fig.update_xaxes(autorange="reversed")
 
         fig.update_layout(
@@ -988,7 +1006,7 @@ def plot_phase_portrait(df):
         )
 
         return fig
-    except Exception as e:
+    except (KeyError, ValueError, TypeError, IndexError):
         return go.Figure()
 
 
@@ -1295,8 +1313,10 @@ if processing_mode == "Single File":
 
     if uploaded_file:
         header, df, extended_info = upload_jasco_rawdata(uploaded_file)
+        show_parse_warnings(get_parse_warnings(df), uploaded_file.name)
         df = preprocess_time_series_data(df)
         df = blank_subtraction_ui(df)
+        df, analysis_range = spectral_range_ui(df, "single")
 
         integrals = calculate_integrals(df)
         avg_emission_wavelength = calculate_avg_emission_wavelength(df)
@@ -1318,6 +1338,8 @@ if processing_mode == "Single File":
 
         if st.session_state.get('blank_subtraction_applied', False):
             st.info("Blank subtraction applied.")
+        if analysis_range is not None:
+            st.info(f"Spectral range limited to {analysis_range[0]:g}-{analysis_range[1]:g} nm.")
 
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
             ["Experiment all", "Average Emission Wavelength", "Max Emission Wavelength", "Integral of Intensities", "Phase Portrait", "Contour"])
@@ -1416,6 +1438,7 @@ else:
                     uploaded_file.seek(0)  # Reset file pointer
 
                     header, df, extended_info = upload_jasco_rawdata(uploaded_file)
+                    parse_warnings = get_parse_warnings(df)
                     df = preprocess_time_series_data(df)
                     run_id = f"run_{len(st.session_state['batch_runs'])}"
                     run = TimeSeriesRun(
@@ -1424,11 +1447,12 @@ else:
                         header=header,
                         raw_df=df,
                         content_hash=content_hash,
+                        parse_warnings=parse_warnings,
                         status='pending'
                     )
                     run = process_single_run(run)
                     st.session_state['batch_runs'][run_id] = run
-                except Exception as e:
+                except (OSError, ValueError, TypeError) as e:
                     st.error(f"Error loading {uploaded_file.name}: {str(e)}")
 
                 progress_bar.progress((idx + 1) / len(uploaded_files))
@@ -1438,6 +1462,7 @@ else:
 
         # Validate wavelength grid consistency
         runs = st.session_state['batch_runs']
+        show_batch_parse_warnings(runs)
         if len(runs) > 1:
             is_valid, warning, mismatched = validate_wavelength_grid(runs)
             if not is_valid:
@@ -1452,6 +1477,7 @@ else:
 
         runs = st.session_state['batch_runs']
         runs = batch_blank_subtraction_ui(runs)
+        runs = batch_spectral_range_ui(runs)
         st.session_state['batch_runs'] = runs
 
         batch_tabs = st.tabs(["Individual", "AEW Comparison", "Max WL Comparison", "Integral Comparison", "Phase Portraits", "Summary", "Export"], key="batch_main_tabs")
@@ -1489,7 +1515,12 @@ else:
 
                 # Create cache key from run data hashes
                 cache_key_data = tuple(
-                    (run_id, run.content_hash if hasattr(run, 'content_hash') else str(hash(str(run.metrics.get('augmented_df', '').head() if 'augmented_df' in run.metrics else ''))))
+                    (
+                        run_id,
+                        run.content_hash if hasattr(run, 'content_hash') else str(hash(str(run.metrics.get('augmented_df', '').head() if 'augmented_df' in run.metrics else ''))),
+                        json.dumps(run.blank_config, sort_keys=True),
+                        getattr(run, "analysis_range", None),
+                    )
                     for run_id, run in runs.items() if run.status == 'complete'
                 )
 
@@ -1580,26 +1611,27 @@ else:
 
             st.markdown("---")
 
-            # Tidy CSV export with provenance
-            st.subheader("Tidy CSV Export")
-            st.markdown("Export all runs in tidy format with provenance metadata. Ideal for downstream analysis in Python, R, or Excel.")
+            # CSV export with provenance
+            st.subheader("CSV Export")
+            st.markdown("Export all run metrics as a CSV file with analysis metadata.")
 
             # Collect analysis parameters for provenance
             analysis_params = {
                 'blank_subtraction_mode': 'per-run',
+                'spectral_range': 'per-run' if any(getattr(run, "analysis_range", None) is not None for run in runs.values()) else 'full',
             }
 
             tidy_csv = export_tidy_csv_with_provenance(runs, analysis_params)
             if tidy_csv:
                 st.download_button(
-                    "📊 Download Tidy CSV (with provenance)",
+                    "Download CSV",
                     data=tidy_csv.encode('utf-8'),
-                    file_name="batch_metrics_tidy.csv",
+                    file_name="batch_metrics.csv",
                     mime='text/csv',
                     help="CSV file with one row per timepoint, columns: run, process_time_h, aew_nm, integral, max_wavelength_nm"
                 )
 
                 # Preview
-                with st.expander("Preview tidy data"):
+                with st.expander("Preview CSV"):
                     preview_lines = tidy_csv.split('\n')[:15]
                     st.code('\n'.join(preview_lines), language='csv')
