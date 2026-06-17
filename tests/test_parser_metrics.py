@@ -1,10 +1,11 @@
 import unittest
+from io import BytesIO
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from fluorosense.io import as_individual_spectrum, parse_jasco_rawdata, parse_warnings
+from fluorosense.io import as_individual_spectrum, parse_jasco_rawdata, parse_spectral_file, parse_warnings
 from fluorosense.metrics import (
     calculate_avg_emission_wavelength,
     calculate_integrals,
@@ -62,6 +63,42 @@ class JascoParserTests(unittest.TestCase):
 
         filtered = filter_single_spectrum_range(spectrum, 310.0, 320.0)
         self.assertEqual([310.0, 320.0], filtered["Wavelength [nm]"].tolist())
+
+    def test_parse_individual_fluorosense_txt_export(self):
+        exported = b"Wavelength [nm]\tIntensity\n300\t10\n310\t20\n320\t30\n"
+
+        result = parse_spectral_file(exported, "sample_processed.txt")
+        spectrum = as_individual_spectrum(result.data)
+
+        self.assertEqual("sample_processed", result.header["TITLE"])
+        self.assertEqual([300, 310, 320], spectrum["Wavelength [nm]"].tolist())
+        self.assertEqual([10, 20, 30], spectrum["Intensity"].tolist())
+        self.assertEqual(result.warnings, parse_warnings(result.data))
+
+    def test_parse_time_series_fluorosense_excel_export(self):
+        exported = BytesIO()
+        processed = pd.DataFrame(
+            {
+                "Process Time [min]": [0.0, 30.0],
+                "300.0": [10.0, 12.0],
+                "310.0": [20.0, 22.0],
+                "Average emission wavelength [nm]": [306.7, 306.5],
+                "Integral": [150.0, 170.0],
+                "Max emission wavelength [nm]": [310.0, 310.0],
+                "Spectral width [nm]": [4.7, 4.8],
+                "Process Time [h]": [0.0, 0.5],
+            }
+        )
+        with pd.ExcelWriter(exported, engine="openpyxl") as writer:
+            processed.to_excel(writer, sheet_name="Data", index=False)
+            pd.DataFrame({"Value": ["sample"]}, index=["TITLE"]).to_excel(writer, sheet_name="Info")
+
+        result = parse_spectral_file(exported.getvalue(), "sample_processed.xlsx")
+
+        self.assertEqual((300.0, 310.0, 2), spectral_range(result.data))
+        self.assertEqual(["0", "30"], result.data.columns.tolist())
+        self.assertEqual([10.0, 20.0], result.data["0"].tolist())
+        self.assertEqual([12.0, 22.0], result.data["30"].tolist())
 
 
 if __name__ == "__main__":

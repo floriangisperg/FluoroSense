@@ -20,7 +20,7 @@ import plotly.graph_objects as go
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
-from fluorosense.io import as_individual_spectrum, parse_jasco_rawdata, parse_warnings
+from fluorosense.io import as_individual_spectrum, parse_spectral_file, parse_warnings
 from fluorosense.metrics import (
     calculate_single_spectrum_aew,
     calculate_single_spectrum_integral,
@@ -56,7 +56,7 @@ dark_template = get_plotly_dark_template()
 
 
 def upload_jasco_rawdata(uploaded_file):
-    result = parse_jasco_rawdata(uploaded_file, getattr(uploaded_file, "name", None))
+    result = parse_spectral_file(uploaded_file, getattr(uploaded_file, "name", None))
     return result.header, as_individual_spectrum(result.data), result.extended_info
 
 
@@ -233,13 +233,16 @@ def plot_bar_chart(df, x_col, y_col, title):
 def main():
     # Page header
     st.title("Individual Spectra Analysis")
-    st.markdown("Upload Jasco spectrofluorometer CSV files to analyze individual emission spectra.")
+    st.markdown("Upload Jasco spectrofluorometer files or FluoroSense exports to visualize individual emission spectra.")
 
     # Sidebar
     st.sidebar.header("Data Upload")
 
     # File uploader for sample files
-    uploaded_files = st.sidebar.file_uploader("Choose CSV files", accept_multiple_files=True)
+    uploaded_files = st.sidebar.file_uploader(
+        "Choose raw data or FluoroSense export files",
+        accept_multiple_files=True,
+    )
 
     # Blank file section
     st.sidebar.markdown("---")

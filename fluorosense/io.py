@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import BytesIO, StringIO
 from dataclasses import dataclass, field
 from typing import BinaryIO
 
@@ -17,6 +18,40 @@ class JascoParseResult:
     data: pd.DataFrame
     extended_info: dict[str, str]
     warnings: list[str] = field(default_factory=list)
+
+
+METRIC_COLUMNS = {
+    "Average emission wavelength [nm]",
+    "Integral",
+    "Max emission wavelength [nm]",
+    "Spectral width [nm]",
+    "Process Time [min]",
+    "Process Time [h]",
+}
+
+
+def _read_bytes(source: bytes | BinaryIO) -> bytes:
+    if isinstance(source, bytes):
+        return source
+
+    position = None
+    if hasattr(source, "tell") and hasattr(source, "seek"):
+        try:
+            position = source.tell()
+            source.seek(0)
+        except (OSError, ValueError):
+            position = None
+
+    content = source.read()
+    if position is not None:
+        try:
+            source.seek(position)
+        except (OSError, ValueError):
+            pass
+
+    if isinstance(content, str):
+        return content.encode("utf-8")
+    return content
 
 
 def _read_lines(source: bytes | BinaryIO) -> list[bytes]:
@@ -56,6 +91,129 @@ def _attach_warnings(df: pd.DataFrame, warnings: list[str]) -> pd.DataFrame:
 def _copy_attrs(source: pd.DataFrame, target: pd.DataFrame) -> pd.DataFrame:
     target.attrs.update(source.attrs)
     return target
+
+
+def _decode_text(content: bytes, file_name: str | None) -> str:
+    return "\n".join(_decode_line(line, file_name) for line in content.splitlines())
+
+
+def _numeric_column_name(column: object) -> float | None:
+    try:
+        value = float(str(column).strip())
+    except (TypeError, ValueError):
+        return None
+    return value if np.isfinite(value) else None
+
+
+def _title_from_name(file_name: str | None, fallback: str = "FluoroSense export") -> str:
+    if not file_name:
+        return fallback
+    return file_name.rsplit(".", 1)[0]
+
+
+def _table_to_spectral_df(table: pd.DataFrame) -> pd.DataFrame:
+    if table.empty:
+        return pd.DataFrame()
+
+    df = table.copy()
+    df.columns = [str(col).strip() for col in df.columns]
+
+    if "Wavelength [nm]" in df.columns:
+        spectrum = df.copy()
+        spectrum["Wavelength [nm]"] = pd.to_numeric(spectrum["Wavelength [nm]"], errors="coerce")
+        spectrum = spectrum.dropna(subset=["Wavelength [nm]"])
+        value_columns = [
+            col
+            for col in spectrum.columns
+            if col != "Wavelength [nm]" and pd.to_numeric(spectrum[col], errors="coerce").notna().any()
+        ]
+        if not value_columns:
+            return pd.DataFrame()
+        result = spectrum[value_columns].apply(pd.to_numeric, errors="coerce")
+        result.index = spectrum["Wavelength [nm]"].astype(float)
+        result.index.name = ""
+        return result.dropna(how="all").sort_index()
+
+    time_column = None
+    if "Process Time [min]" in df.columns:
+        time_column = "Process Time [min]"
+        process_time = pd.to_numeric(df[time_column], errors="coerce")
+    elif "Process Time [h]" in df.columns:
+        time_column = "Process Time [h]"
+        process_time = pd.to_numeric(df[time_column], errors="coerce") * 60
+    else:
+        process_time = pd.Series(np.arange(len(df), dtype=float), index=df.index)
+
+    wavelength_columns: list[str] = []
+    wavelengths: list[float] = []
+    for col in df.columns:
+        if col == time_column or col in METRIC_COLUMNS:
+            continue
+        wavelength = _numeric_column_name(col)
+        if wavelength is None:
+            continue
+        wavelength_columns.append(col)
+        wavelengths.append(wavelength)
+
+    if not wavelength_columns:
+        return pd.DataFrame()
+
+    spectral_rows = df[wavelength_columns].apply(pd.to_numeric, errors="coerce")
+    spectral_rows = spectral_rows.loc[process_time.notna()]
+    process_time = process_time.loc[spectral_rows.index]
+    if spectral_rows.empty:
+        return pd.DataFrame()
+
+    result = spectral_rows.T
+    result.index = wavelengths
+    result.index.name = ""
+    result.columns = [f"{float(value):g}" for value in process_time]
+    return result.dropna(how="all").sort_index()
+
+
+def _parse_exported_text(content: bytes, file_name: str | None) -> pd.DataFrame:
+    text = _decode_text(content, file_name)
+    if not text.strip():
+        return pd.DataFrame()
+
+    table = pd.read_csv(StringIO(text), sep=None, engine="python", comment="#")
+    return _table_to_spectral_df(table)
+
+
+def _parse_exported_excel(content: bytes) -> pd.DataFrame:
+    excel_file = pd.ExcelFile(BytesIO(content))
+    preferred_sheets = [sheet for sheet in excel_file.sheet_names if sheet not in {"Info", "Summary"}]
+    for sheet_name in preferred_sheets + excel_file.sheet_names:
+        table = pd.read_excel(excel_file, sheet_name=sheet_name)
+        spectral_df = _table_to_spectral_df(table)
+        if not spectral_df.empty:
+            return spectral_df
+    return pd.DataFrame()
+
+
+def parse_spectral_file(source: bytes | BinaryIO, file_name: str | None = None) -> JascoParseResult:
+    """Parse Jasco raw data or FluoroSense spectrum exports."""
+
+    content = _read_bytes(source)
+    result = parse_jasco_rawdata(content, file_name)
+    if not result.data.empty:
+        return result
+
+    lowered_name = (file_name or "").lower()
+    try:
+        if lowered_name.endswith((".xlsx", ".xlsm", ".xls")):
+            data = _parse_exported_excel(content)
+        else:
+            data = _parse_exported_text(content, file_name)
+    except (OSError, ValueError, TypeError, pd.errors.ParserError):
+        return result
+
+    if data.empty:
+        return result
+
+    warnings = ["Loaded FluoroSense export; only spectral visualization data were imported."]
+    header = {"TITLE": _title_from_name(file_name)}
+    return JascoParseResult(header, _attach_warnings(data, warnings), {}, warnings)
 
 
 def parse_jasco_rawdata(source: bytes | BinaryIO, file_name: str | None = None) -> JascoParseResult:
