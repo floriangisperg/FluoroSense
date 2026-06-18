@@ -14,6 +14,7 @@ from fluorosense.metrics import (
     filter_spectral_range,
     filter_single_spectrum_range,
     spectral_range,
+    time_series_wavelength_columns,
 )
 
 
@@ -99,6 +100,22 @@ class JascoParserTests(unittest.TestCase):
         self.assertEqual(["0", "30"], result.data.columns.tolist())
         self.assertEqual([10.0, 20.0], result.data["0"].tolist())
         self.assertEqual([12.0, 22.0], result.data["30"].tolist())
+
+    def test_augmented_time_series_wavelength_columns_exclude_metrics(self):
+        augmented = pd.DataFrame(
+            {
+                "Process Time [min]": [0.0],
+                "300.0": [10.0],
+                "310": [20.0],
+                "Average emission wavelength [nm]": [306.7],
+                "Integral": [150.0],
+                "Max emission wavelength [nm]": [310.0],
+                "Spectral width [nm]": [4.7],
+                "Process Time [h]": [0.0],
+            }
+        )
+
+        self.assertEqual(["300.0", "310"], time_series_wavelength_columns(augmented))
 
 
 if __name__ == "__main__":

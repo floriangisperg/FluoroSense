@@ -11,6 +11,30 @@ AEW_COLUMN = "Average emission wavelength [nm]"
 INTEGRAL_COLUMN = "Integral"
 MAX_WAVELENGTH_COLUMN = "Max emission wavelength [nm]"
 SPECTRAL_WIDTH_COLUMN = "Spectral width [nm]"
+TIME_SERIES_METADATA_COLUMNS = {
+    "Process Time [min]",
+    "Process Time [h]",
+    AEW_COLUMN,
+    INTEGRAL_COLUMN,
+    MAX_WAVELENGTH_COLUMN,
+    SPECTRAL_WIDTH_COLUMN,
+}
+
+
+def time_series_wavelength_columns(df: pd.DataFrame) -> list[object]:
+    """Return columns that represent wavelength spectra in an augmented time-series table."""
+
+    wavelength_columns = []
+    for column in df.columns:
+        if column in TIME_SERIES_METADATA_COLUMNS:
+            continue
+        try:
+            wavelength = float(str(column).strip())
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(wavelength):
+            wavelength_columns.append(column)
+    return wavelength_columns
 
 
 def _copy_attrs(source: pd.DataFrame, target: pd.DataFrame) -> pd.DataFrame:

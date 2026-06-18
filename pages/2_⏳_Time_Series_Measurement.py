@@ -30,7 +30,7 @@ import colorsys
 import hashlib
 import json
 import html
-from fluorosense.io import parse_spectral_file, parse_warnings
+from fluorosense.io import parse_spectral_file, parse_warnings as attached_parse_warnings
 from fluorosense.metrics import (
     AEW_COLUMN,
     INTEGRAL_COLUMN,
@@ -44,6 +44,7 @@ from fluorosense.metrics import (
     coerce_time_series_data,
     filter_spectral_range,
     spectral_range,
+    time_series_wavelength_columns,
 )
 
 def compute_content_hash(file_content: bytes) -> str:
@@ -147,7 +148,7 @@ def upload_jasco_rawdata(uploaded_file):
 
 def get_parse_warnings(df):
     """Return parser warnings attached to a dataframe."""
-    return parse_warnings(df)
+    return attached_parse_warnings(df)
 
 
 def show_parse_warnings(warnings, file_name=None):
@@ -726,17 +727,22 @@ def plot_intensity(df, interval=None):
             df = closest_times(df, interval)
             df = df.reset_index(drop=True)
 
-        df_plot = df.T
-        df_plot.columns = df_plot.iloc[-1]
-        df_plot = df_plot[:-4]
+        wavelength_columns = time_series_wavelength_columns(df)
+        if not wavelength_columns:
+            return go.Figure()
+
+        wavelengths = [float(str(column).strip()) for column in wavelength_columns]
+        time_values = pd.to_numeric(df["Process Time [h]"], errors="coerce")
 
         fig = go.Figure()
-        for i in range(df_plot.shape[1]):
+        for i, (_, row) in enumerate(df.iterrows()):
+            time_value = time_values.iloc[i] if i < len(time_values) else np.nan
+            trace_name = f"{time_value:g}" if pd.notna(time_value) else str(i)
             fig.add_trace(go.Scatter(
-                x=df_plot.index,
-                y=df_plot[df_plot.columns[i]],
-                name=str(df_plot.columns[i]),
-                customdata=np.tile(df_plot.columns[i], len(df_plot.index)),
+                x=wavelengths,
+                y=pd.to_numeric(row[wavelength_columns], errors="coerce"),
+                name=trace_name,
+                customdata=np.tile(trace_name, len(wavelengths)),
                 hovertemplate='<b>Time:</b> %{customdata}<br><b>WL:</b> %{x}<br><b>Int:</b> %{y}<extra></extra>',
             ))
 
@@ -1442,7 +1448,7 @@ else:
                     uploaded_file.seek(0)  # Reset file pointer
 
                     header, df, extended_info = upload_jasco_rawdata(uploaded_file)
-                    parse_warnings = get_parse_warnings(df)
+                    parser_warnings = get_parse_warnings(df)
                     df = preprocess_time_series_data(df)
                     run_id = f"run_{len(st.session_state['batch_runs'])}"
                     run = TimeSeriesRun(
@@ -1451,7 +1457,7 @@ else:
                         header=header,
                         raw_df=df,
                         content_hash=content_hash,
-                        parse_warnings=parse_warnings,
+                        parse_warnings=parser_warnings,
                         status='pending'
                     )
                     run = process_single_run(run)
@@ -1484,7 +1490,7 @@ else:
         runs = batch_spectral_range_ui(runs)
         st.session_state['batch_runs'] = runs
 
-        batch_tabs = st.tabs(["Individual", "AEW Comparison", "Max WL Comparison", "Integral Comparison", "Phase Portraits", "Summary", "Export"], key="batch_main_tabs")
+        batch_tabs = st.tabs(["Individual", "AEW Comparison", "Max WL Comparison", "Integral Comparison", "Phase Portraits", "Summary", "Export"])
 
         with batch_tabs[0]:
             st.header("Individual Run")
