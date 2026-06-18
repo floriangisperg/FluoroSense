@@ -330,15 +330,37 @@ def as_individual_spectrum(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Wavelength [nm]", "Intensity"])
 
+    if {"Wavelength [nm]", "Intensity"}.issubset(df.columns):
+        result = pd.DataFrame(
+            {
+                "Wavelength [nm]": pd.to_numeric(df["Wavelength [nm]"], errors="coerce"),
+                "Intensity": pd.to_numeric(df["Intensity"], errors="coerce"),
+            }
+        )
+        return _copy_attrs(df, result.dropna(how="any").reset_index(drop=True))
+
     numeric_df = df.select_dtypes(include=["number"])
     if numeric_df.empty:
         return pd.DataFrame(columns=["Wavelength [nm]", "Intensity"])
 
-    first_col = numeric_df.columns[0]
+    if isinstance(numeric_df.index, pd.RangeIndex) and len(numeric_df.columns) >= 2:
+        wavelength_col = numeric_df.columns[0]
+        intensity_col = numeric_df.columns[1]
+        wavelengths = pd.to_numeric(numeric_df[wavelength_col], errors="coerce")
+        if wavelengths.is_monotonic_increasing and wavelengths.notna().any():
+            result = pd.DataFrame(
+                {
+                    "Wavelength [nm]": wavelengths,
+                    "Intensity": pd.to_numeric(numeric_df[intensity_col], errors="coerce"),
+                }
+            )
+            return _copy_attrs(df, result.dropna(how="any").reset_index(drop=True))
+
+    intensity_col = numeric_df.columns[0]
     result = pd.DataFrame(
         {
             "Wavelength [nm]": pd.to_numeric(numeric_df.index, errors="coerce"),
-            "Intensity": pd.to_numeric(numeric_df[first_col], errors="coerce"),
+            "Intensity": pd.to_numeric(numeric_df[intensity_col], errors="coerce"),
         }
     )
     result = result.dropna(how="any").reset_index(drop=True)

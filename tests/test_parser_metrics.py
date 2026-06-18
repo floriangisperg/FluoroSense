@@ -65,6 +65,22 @@ class JascoParserTests(unittest.TestCase):
         filtered = filter_single_spectrum_range(spectrum, 310.0, 320.0)
         self.assertEqual([310.0, 320.0], filtered["Wavelength [nm]"].tolist())
 
+    def test_individual_spectrum_uses_explicit_wavelength_column(self):
+        raw = pd.DataFrame({"Wavelength": [300.0, 310.0, 320.0], "Signal": [10.0, 20.0, 30.0]})
+
+        spectrum = as_individual_spectrum(raw)
+
+        self.assertEqual([300.0, 310.0, 320.0], spectrum["Wavelength [nm]"].tolist())
+        self.assertEqual([10.0, 20.0, 30.0], spectrum["Intensity"].tolist())
+
+    def test_individual_spectrum_preserves_export_columns(self):
+        raw = pd.DataFrame({"Wavelength [nm]": [300.0, 310.0], "Intensity": [11.0, 22.0]})
+
+        spectrum = as_individual_spectrum(raw)
+
+        self.assertEqual([300.0, 310.0], spectrum["Wavelength [nm]"].tolist())
+        self.assertEqual([11.0, 22.0], spectrum["Intensity"].tolist())
+
     def test_parse_individual_fluorosense_txt_export(self):
         exported = b"Wavelength [nm]\tIntensity\n300\t10\n310\t20\n320\t30\n"
 
