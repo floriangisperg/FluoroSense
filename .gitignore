@@ -90,9 +90,6 @@ claude.md
 .devcontainer/
 .devcontainer.json
 
-# OpenSpec (development tooling)
-openspec/
-
 # IDE
 .idea/
 

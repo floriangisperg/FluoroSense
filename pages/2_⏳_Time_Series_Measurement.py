@@ -44,8 +44,32 @@ from fluorosense.metrics import (
     coerce_time_series_data,
     filter_spectral_range,
     spectral_range,
-    time_series_wavelength_columns,
 )
+
+
+TIME_SERIES_METADATA_COLUMNS = {
+    "Process Time [min]",
+    "Process Time [h]",
+    AEW_COLUMN,
+    INTEGRAL_COLUMN,
+    MAX_WAVELENGTH_COLUMN,
+    SPECTRAL_WIDTH_COLUMN,
+}
+
+
+def time_series_wavelength_columns(df):
+    """Return columns that represent wavelength spectra in an augmented time-series table."""
+    wavelength_columns = []
+    for column in df.columns:
+        if column in TIME_SERIES_METADATA_COLUMNS:
+            continue
+        try:
+            wavelength = float(str(column).strip())
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(wavelength):
+            wavelength_columns.append(column)
+    return wavelength_columns
 
 def compute_content_hash(file_content: bytes) -> str:
     """Compute SHA256 hash of file content for caching"""
