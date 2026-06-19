@@ -11,6 +11,7 @@ from fluorosense.metrics import (
     calculate_integrals,
     calculate_single_spectrum_aew,
     calculate_single_spectrum_integral,
+    calculate_single_spectrum_max_wavelength,
     filter_spectral_range,
     filter_single_spectrum_range,
     spectral_range,
@@ -61,6 +62,7 @@ class JascoParserTests(unittest.TestCase):
 
         self.assertEqual(312.5, calculate_single_spectrum_aew(spectrum))
         self.assertAlmostEqual(70.0 / 3.0, calculate_single_spectrum_integral(spectrum))
+        self.assertEqual(320.0, calculate_single_spectrum_max_wavelength(spectrum))
 
         filtered = filter_single_spectrum_range(spectrum, 310.0, 320.0)
         self.assertEqual([310.0, 320.0], filtered["Wavelength [nm]"].tolist())
