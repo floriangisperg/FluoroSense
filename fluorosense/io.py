@@ -105,6 +105,25 @@ def _numeric_column_name(column: object) -> float | None:
     return value if np.isfinite(value) else None
 
 
+def _row_is_all_numeric(row: list[str]) -> bool:
+    """True when every field in a data row parses as a finite number.
+
+    Distinguishes a headerless XYDATA section (whose first row is already data,
+    e.g. ``"300.0000,46.0996"``) from one that begins with a column header such
+    as ``",0,1.7333,..."`` (multi-column time-series) or ``"Wavelength,Intensity"``.
+    """
+    if not row:
+        return False
+    for field in row:
+        try:
+            value = float(str(field).strip())
+        except (TypeError, ValueError):
+            return False
+        if not np.isfinite(value):
+            return False
+    return True
+
+
 def _title_from_name(file_name: str | None, fallback: str = "FluoroSense export") -> str:
     if not file_name:
         return fallback
@@ -272,10 +291,22 @@ def parse_jasco_rawdata(source: bytes | BinaryIO, file_name: str | None = None) 
     if not xydata or len(xydata) <= 1:
         return JascoParseResult(header, pd.DataFrame(), extended_info, warnings)
 
-    expected_fields = len(xydata[0])
+    # Multi-column (time-series) exports start the XYDATA section with a column
+    # header like ",0,1.7333,...", but single-spectrum exports omit it and begin
+    # straight with numeric data such as "300.0000,46.0996". When the first row
+    # is itself numeric there is no header to consume.
+    header_row = xydata[0]
+    if _row_is_all_numeric(header_row):
+        columns = None
+        data_rows = xydata
+    else:
+        columns = [str(field).strip() for field in header_row]
+        data_rows = xydata[1:]
+
+    expected_fields = len(header_row)
     complete_rows = []
     skipped_rows = 0
-    for row in xydata[1:]:
+    for row in data_rows:
         if len(row) == expected_fields:
             complete_rows.append(row)
         else:
@@ -287,14 +318,15 @@ def parse_jasco_rawdata(source: bytes | BinaryIO, file_name: str | None = None) 
     if not complete_rows:
         return JascoParseResult(header, pd.DataFrame(), extended_info, warnings)
 
-    df = pd.DataFrame(complete_rows, columns=xydata[0])
+    df = pd.DataFrame(complete_rows, columns=columns)
     for col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    if "" in df.columns:
-        df.set_index("", inplace=True)
-    elif len(df.columns) > 0 and str(df.columns[0]).strip() == "":
-        df.set_index(df.columns[0], inplace=True)
+    # The first XYDATA column is always the wavelength (x) axis: the unnamed ""
+    # column for time-series exports and the leading wavelength column for
+    # headerless single spectra. Use it as the index either way.
+    df.set_index(df.columns[0], inplace=True)
+    df.index.name = ""
 
     df = df.dropna(how="all")
     df.index = pd.to_numeric(df.index, errors="coerce")
