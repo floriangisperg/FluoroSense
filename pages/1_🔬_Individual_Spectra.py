@@ -45,8 +45,7 @@ config = {
         'scale': download_text_scale
     },
     'modeBarButtonsToAdd': [
-        'hoverclosest', 'hovercompare', 'togglehover', 'togglespikelines',
-        'v1hovermode', 'drawline', 'drawopenpath', 'drawclosedpath',
+        'drawline', 'drawopenpath', 'drawclosedpath',
         'drawcircle', 'drawrect', 'eraseshape'
     ],
     'displayModeBar': True
