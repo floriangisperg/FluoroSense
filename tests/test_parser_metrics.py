@@ -81,6 +81,48 @@ class JascoParserTests(unittest.TestCase):
         self.assertEqual([300.0, 310.0], spectrum["Wavelength [nm]"].tolist())
         self.assertEqual([11.0, 22.0], spectrum["Intensity"].tolist())
 
+    def test_parse_headerless_single_spectrum_jasco_raw(self):
+        # Real Jasco single-spectrum exports have no column header in the XYDATA
+        # section: the first row after "XYDATA" is numeric data. The first
+        # wavelength point must be kept and intensity must not collapse onto the
+        # wavelength axis (regression for the slope-1 "linear line" plot bug).
+        raw = (
+            b"TITLE,0.4 M\n"
+            b"XUNITS,NANOMETERS\n"
+            b"YUNITS,INTENSITY\n"
+            b"FIRSTX,  300.0000\n"
+            b"LASTX,  305.0000\n"
+            b"NPOINTS,     11\n"
+            b"XYDATA\n"
+            b"300.0000,46.0996\n"
+            b"300.5000,50.0778\n"
+            b"301.0000,54.3144\n"
+            b"301.5000,58.8205\n"
+            b"302.0000,63.7031\n"
+            b"302.5000,69.3096\n"
+            b"303.0000,75.565\n"
+            b"303.5000,82.3133\n"
+            b"304.0000,89.4886\n"
+            b"304.5000,97.1877\n"
+            b"305.0000,105.834\n"
+            b"##### Extended Information\n"
+        )
+
+        result = parse_spectral_file(raw, "0.4 M.csv")
+        spectrum = as_individual_spectrum(result.data)
+
+        self.assertEqual(11, len(spectrum))
+        self.assertEqual([300.0, 300.5, 305.0], [spectrum["Wavelength [nm]"].iloc[0],
+                                                  spectrum["Wavelength [nm]"].iloc[1],
+                                                  spectrum["Wavelength [nm]"].iloc[-1]])
+        self.assertEqual([46.0996, 105.834], [spectrum["Intensity"].iloc[0],
+                                              spectrum["Intensity"].iloc[-1]])
+        # The first data point must not be silently dropped as a "header".
+        self.assertEqual("0.4 M", result.header["TITLE"])
+        self.assertNotIn("Incomplete spectrum", "\n".join(result.warnings))
+        # Intensity is not the wavelength axis re-plotted (the original symptom).
+        self.assertFalse(spectrum["Intensity"].equals(spectrum["Wavelength [nm]"]))
+
     def test_parse_individual_fluorosense_txt_export(self):
         exported = b"Wavelength [nm]\tIntensity\n300\t10\n310\t20\n320\t30\n"
 
