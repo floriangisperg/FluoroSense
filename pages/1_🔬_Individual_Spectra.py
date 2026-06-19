@@ -24,6 +24,7 @@ from fluorosense.io import as_individual_spectrum, parse_spectral_file, parse_wa
 from fluorosense.metrics import (
     calculate_single_spectrum_aew,
     calculate_single_spectrum_integral,
+    calculate_single_spectrum_max_wavelength,
     filter_single_spectrum_range,
 )
 
@@ -120,6 +121,10 @@ def normalize(df):
 
 def calculate_integral(df):
     return calculate_single_spectrum_integral(df)
+
+
+def calculate_max_wavelength(df):
+    return calculate_single_spectrum_max_wavelength(df)
 
 
 def spectral_range_ui(data_headers_and_dfs):
@@ -287,9 +292,10 @@ def main():
                     cols[2].metric("Max Intensity", f"{df['Intensity'].max():.1f}")
 
             # Tabs
-            tab1, tab2, tab3, tab4 = st.tabs([
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
                 "Raw Data",
                 "Average Emission Wavelength",
+                "Max Emission Wavelength",
                 "Integral",
                 "Normalized Data"
             ])
@@ -327,6 +333,30 @@ def main():
                 plot_bar_chart(avg_emission_df, "Title", "Average Emission Wavelength", "AEW [nm]")
 
             with tab3:
+                st.subheader("Max Emission Wavelength")
+                st.markdown("The max emission wavelength is the wavelength at peak fluorescence intensity.")
+
+                max_wavelengths = [
+                    (header['TITLE'], calculate_max_wavelength(df))
+                    for header, df, extended_info in data_headers_and_dfs
+                ]
+                max_wavelength_df = pd.DataFrame(max_wavelengths, columns=["Title", "Max Emission Wavelength"])
+
+                st.dataframe(max_wavelength_df, width='stretch', hide_index=True)
+
+                # Download button
+                max_wavelength_csv = max_wavelength_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download max emission wavelength as CSV",
+                    data=max_wavelength_csv,
+                    file_name='max_emission_wavelength.csv',
+                    mime='text/csv',
+                )
+
+                # Bar chart
+                plot_bar_chart(max_wavelength_df, "Title", "Max Emission Wavelength", "Max WL [nm]")
+
+            with tab4:
                 st.subheader("Spectral Integral")
                 st.markdown("The integral represents the total fluorescence intensity across all wavelengths.")
 
@@ -350,7 +380,7 @@ def main():
                 # Bar chart
                 plot_bar_chart(integrals_df, "Title", "Integral", "Integral")
 
-            with tab4:
+            with tab5:
                 st.subheader("Normalized Spectra")
                 st.markdown("Spectra normalized to [0, 1] range for shape comparison.")
 

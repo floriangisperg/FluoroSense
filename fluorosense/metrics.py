@@ -217,6 +217,17 @@ def calculate_single_spectrum_integral(df: pd.DataFrame) -> float:
     return float(simpson(valid["Intensity"].to_numpy(dtype=float), x=valid["Wavelength [nm]"].to_numpy(dtype=float)))
 
 
+def calculate_single_spectrum_max_wavelength(df: pd.DataFrame) -> float:
+    """Find the wavelength of maximum intensity for a single spectrum dataframe."""
+
+    valid = df[["Wavelength [nm]", "Intensity"]].dropna()
+    if valid.empty:
+        return np.nan
+    wavelengths = valid["Wavelength [nm]"].to_numpy(dtype=float)
+    intensities = valid["Intensity"].to_numpy(dtype=float)
+    return float(wavelengths[int(np.argmax(intensities))])
+
+
 def augment_dataframe(
     df: pd.DataFrame,
     avg_emission_wavelength: list[float],
