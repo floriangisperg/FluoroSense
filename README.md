@@ -1,12 +1,12 @@
 # FluoroSense
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tuwien-jasco.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://fluorosense.streamlit.app/)
 ![Python](https://img.shields.io/badge/Python-3.8%20|%203.9%20|%203.10%20|%203.11-blue)
 ![Status](https://img.shields.io/badge/status-active-success)
 
 A Streamlit-based web application for analyzing fluorescence spectroscopy data from Jasco spectrofluorometer instruments. Designed for protein kinetics research, specifically monitoring protein folding and unfolding through intrinsic tryptophan and tyrosine fluorescence.
 
-**[Live Demo](https://tuwien-jasco.streamlit.app/)**
+**[Live Demo](https://fluorosense.streamlit.app/)**
 
 ---
 
