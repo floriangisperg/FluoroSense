@@ -19,44 +19,39 @@ from fluorosense.metrics import (
 )
 
 
-# Regression fixtures are committed with the repo so these tests genuinely run
-# on a fresh clone (previously they lived in gitignored data/ and the tests
-# passed vacuously when the directory was absent).
-REPRODUCE_DIR = Path(__file__).resolve().parent / "fixtures" / "reproduce_bug"
-REPRODUCE_FILES = sorted(REPRODUCE_DIR.glob("*.csv"))
-skip_without_fixtures = unittest.skipUnless(
-    REPRODUCE_FILES,
-    "Regression fixture CSVs missing from tests/fixtures/reproduce_bug/",
+# Synthetic regression fixture, committed with the repo. It mimics the
+# structural quirks of the real instrument files that once broke the parser
+# (multi-column time-series, ragged final row, spectrum truncated vs NPOINTS)
+# without committing any real experiment data.
+SYNTHETIC_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "synthetic_timeseries.csv"
+skip_without_fixture = unittest.skipUnless(
+    SYNTHETIC_FIXTURE.exists(),
+    "Synthetic regression fixture missing from tests/fixtures/",
 )
 
 
 class JascoParserTests(unittest.TestCase):
-    @skip_without_fixtures
-    def test_reproduce_files_drop_ragged_final_row_and_warn(self):
-        for path in sorted(REPRODUCE_DIR.glob("*.csv")):
-            with self.subTest(path=path.name):
-                result = parse_jasco_rawdata(path.read_bytes(), path.name)
+    @skip_without_fixture
+    def test_synthetic_fixture_ragged_row_dropped_and_warned(self):
+        result = parse_jasco_rawdata(SYNTHETIC_FIXTURE.read_bytes(), SYNTHETIC_FIXTURE.name)
 
-                self.assertEqual((300.0, 363.5, 128), spectral_range(result.data))
-                self.assertEqual((128, 661), result.data.shape)
-                self.assertEqual(0, int(result.data.isna().sum().sum()))
-                self.assertIn("1 incomplete wavelength row(s) skipped.", result.warnings)
-                self.assertIn("Incomplete spectrum: 128/301 wavelength points.", result.warnings)
-                self.assertIn("Range 300-363.5 nm; expected 300-450 nm.", result.warnings)
-                self.assertEqual(result.warnings, parse_warnings(result.data))
+        self.assertEqual((300.0, 320.0, 21), spectral_range(result.data))
+        self.assertEqual((21, 3), result.data.shape)
+        self.assertEqual(0, int(result.data.isna().sum().sum()))
+        self.assertIn("1 incomplete wavelength row(s) skipped.", result.warnings)
+        self.assertIn("Incomplete spectrum: 21/25 wavelength points.", result.warnings)
+        self.assertEqual(result.warnings, parse_warnings(result.data))
 
-    @skip_without_fixtures
-    def test_time_series_metrics_are_numeric_for_reproduce_files(self):
-        for path in sorted(REPRODUCE_DIR.glob("*.csv")):
-            with self.subTest(path=path.name):
-                result = parse_jasco_rawdata(path.read_bytes(), path.name)
-                integrals = calculate_integrals(result.data)
-                aew = calculate_avg_emission_wavelength(result.data)
+    @skip_without_fixture
+    def test_synthetic_fixture_time_series_metrics_are_numeric(self):
+        result = parse_jasco_rawdata(SYNTHETIC_FIXTURE.read_bytes(), SYNTHETIC_FIXTURE.name)
+        integrals = calculate_integrals(result.data)
+        aew = calculate_avg_emission_wavelength(result.data)
 
-                self.assertEqual(661, len(integrals))
-                self.assertEqual(661, len(aew))
-                self.assertFalse(integrals.isna().any())
-                self.assertFalse(np.isnan(aew).any())
+        self.assertEqual(3, len(integrals))
+        self.assertEqual(3, len(aew))
+        self.assertFalse(integrals.isna().any())
+        self.assertFalse(np.isnan(aew).any())
 
     def test_filter_spectral_range_is_inclusive(self):
         df = pd.DataFrame({"0": [1.0, 2.0, 3.0, 4.0]}, index=[300.0, 310.0, 320.0, 330.0])

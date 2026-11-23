@@ -31,7 +31,7 @@ Python `>=3.11,<3.14` (developed on 3.13).
 uv run python -m pytest tests/ -q
 ```
 
-Regression fixtures live in `tests/fixtures/reproduce_bug/*.csv` and are committed. The data-dependent tests skip loudly if the fixtures are missing. The parser imports as a plain package (`fluorosense`), no install step needed when running pytest from the repo root.
+A synthetic regression fixture (`tests/fixtures/synthetic_timeseries.csv`) is committed; the parser tests skip loudly if it goes missing. No real experiment data is ever committed. The parser imports as a plain package (`fluorosense`), no install step needed when running pytest from the repo root.
 
 ## Architecture
 
@@ -61,7 +61,7 @@ Both pages: plots 1200×600, SVG download export (1200×600), custom modebar dra
 2. **Jasco multi-column time-series CSV**: same wrapper; `XYDATA` first row is a comma-prefixed header of process times in minutes (`,0,2.56667,...`), one intensity column per timepoint, wavelengths as row index (300–450 nm, 0.5 nm steps).
 3. **FluoroSense exports** (its own .txt/.xlsx/.csv outputs) are re-importable by both pages.
 
-Sample instrument files in `data/timeseries/Exp1.csv` … `Exp9.csv` (untracked, gitignored). Regression fixtures in `tests/fixtures/reproduce_bug/` (tracked).
+Sample instrument files in `data/timeseries/Exp1.csv` … `Exp9.csv` (untracked, gitignored — real experiment data never enters git).
 
 ## Conventions and Gotchas
 
