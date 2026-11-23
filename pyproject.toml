@@ -15,6 +15,9 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+packages = ["fluorosense"]
+
+[dependency-groups]
+dev = ["pytest>=9"]
 
 

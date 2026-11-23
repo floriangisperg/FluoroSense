@@ -11,17 +11,24 @@ Live deployment: https://fluorosense.streamlit.app/ (Streamlit Community Cloud, 
 ## Running the Application
 
 ```bash
-streamlit run Home.py
+uv sync
+uv run streamlit run Home.py
 ```
 
-Python `>=3.11,<3.14` (developed on 3.13). Install dependencies from `requirements.txt` (canonical for Cloud) or `pyproject.toml` — keep the two in sync.
+Python `>=3.11,<3.14` (developed on 3.13).
 
-Key dependencies: streamlit==1.57.0, plotly==5.15.0, numpy==2.3.5, pandas==2.3.3, scikit-learn==1.8.0 (only for MinMaxScaler normalization), openpyxl==3.1.2 (Excel export/import), scipy==1.17.1 (integration + curve fitting).
+## Dependencies (uv-managed)
+
+- `pyproject.toml` is the single source of truth; `uv.lock` pins the full resolution and is committed.
+- Local setup: `uv sync` creates `.venv` (including the `dev` dependency group with pytest), then `uv run ...` for everything.
+- `requirements.txt` is **generated, not hand-written**. Streamlit Community Cloud installs from it, so regenerate it after any dependency change:
+  `uv export --format requirements-txt --no-hashes --no-dev --no-emit-project > requirements.txt`
+- Key direct dependencies: streamlit==1.57.0, plotly==5.15.0, numpy==2.3.5, pandas==2.3.3, scikit-learn==1.8.0 (only for MinMaxScaler normalization), openpyxl==3.1.2 (Excel export/import), scipy==1.17.1 (integration + curve fitting).
 
 ## Tests
 
 ```bash
-python -m pytest tests/ -q
+uv run python -m pytest tests/ -q
 ```
 
 Regression fixtures live in `tests/fixtures/reproduce_bug/*.csv` and are committed. The data-dependent tests skip loudly if the fixtures are missing. The parser imports as a plain package (`fluorosense`), no install step needed when running pytest from the repo root.

@@ -65,6 +65,8 @@ uv sync
 uv run streamlit run Home.py
 ```
 
+> `requirements.txt` is auto-generated from `pyproject.toml` (via `uv export`) and is what the Streamlit Cloud deployment installs — regenerate it after dependency changes rather than editing it by hand.
+
 ### Using pip
 
 ```bash
@@ -147,8 +149,8 @@ Incomplete/ragged wavelength rows are dropped with a visible warning so all spec
 ## Development & Testing
 
 ```bash
-pip install pytest
-python -m pytest tests/ -q
+uv sync                          # includes the dev group (pytest)
+uv run python -m pytest tests/ -q
 ```
 
 ---
