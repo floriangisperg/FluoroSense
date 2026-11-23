@@ -74,11 +74,6 @@ def single_measurement_df_to_txt(df, header, suffix=''):
     return csv
 
 
-def convert_df_to_txt(df, header):
-    txt = single_measurement_df_to_txt(df, header)
-    return txt.encode('utf-8')
-
-
 def subtract_blank(sample_df, blank_df):
     if blank_df.empty:
         return sample_df

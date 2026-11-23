@@ -18,14 +18,9 @@ import plotly.graph_objects as go
 import plotly.express as px
 from scipy.optimize import curve_fit
 from scipy.stats import t
-import io
-from io import StringIO
-from io import BytesIO
-from openpyxl import Workbook
-from openpyxl.writer.excel import save_workbook
-from tempfile import NamedTemporaryFile
+from io import StringIO, BytesIO
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 import colorsys
 import hashlib
 import json
@@ -36,6 +31,7 @@ from fluorosense.metrics import (
     INTEGRAL_COLUMN,
     MAX_WAVELENGTH_COLUMN,
     SPECTRAL_WIDTH_COLUMN,
+    TIME_SERIES_METADATA_COLUMNS,
     augment_dataframe as build_augmented_dataframe,
     calculate_avg_emission_wavelength as compute_avg_emission_wavelength,
     calculate_integrals as compute_integrals,
@@ -44,32 +40,9 @@ from fluorosense.metrics import (
     coerce_time_series_data,
     filter_spectral_range,
     spectral_range,
+    time_series_wavelength_columns,
 )
 
-
-TIME_SERIES_METADATA_COLUMNS = {
-    "Process Time [min]",
-    "Process Time [h]",
-    AEW_COLUMN,
-    INTEGRAL_COLUMN,
-    MAX_WAVELENGTH_COLUMN,
-    SPECTRAL_WIDTH_COLUMN,
-}
-
-
-def time_series_wavelength_columns(df):
-    """Return columns that represent wavelength spectra in an augmented time-series table."""
-    wavelength_columns = []
-    for column in df.columns:
-        if column in TIME_SERIES_METADATA_COLUMNS:
-            continue
-        try:
-            wavelength = float(str(column).strip())
-        except (TypeError, ValueError):
-            continue
-        if np.isfinite(wavelength):
-            wavelength_columns.append(column)
-    return wavelength_columns
 
 def compute_content_hash(file_content: bytes) -> str:
     """Compute SHA256 hash of file content for caching"""
