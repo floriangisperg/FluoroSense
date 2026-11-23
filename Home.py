@@ -16,6 +16,60 @@ st.set_page_config(
 from styles import apply_dark_lab_theme
 apply_dark_lab_theme()
 
+from pathlib import Path
+
+# Footer credit URLs (same institutions as the LysoSense app)
+CDLAB_URL = "https://www.tuwien.at/en/cdl/ibp4"
+CDG_URL = "https://www.cdg.ac.at/en/research-units/labor/inclusion-body-processing-40"
+BI_URL = "https://www.boehringer-ingelheim.com/"
+IBD_URL = "https://www.tuwien.at/en/tch/icebe/ibdgroup"
+TUWIEN_URL = "https://www.tuwien.at/en/"
+
+
+def _render_credit_logos() -> None:
+    """Clickable logo strip shown in the page footer.
+
+    Raster logos (PNG/JPG/WebP) are embedded as base64 data-URI ``<img>`` tags.
+    The Boehringer Ingelheim logo is an SVG and is inlined directly: SVGs
+    loaded via data-URI ``<img>`` tags can be blocked by content-security
+    policies, whereas inlined ``<svg>`` markup renders reliably.
+    """
+    import base64
+    import re
+
+    base = Path(__file__).parent / "assets"
+    items = [
+        ("ibd_logo.png", IBD_URL),
+        ("tuwien_logo.webp", TUWIEN_URL),
+        ("bi_logo.svg", BI_URL),
+        ("cdg_logo.png", CDG_URL),
+    ]
+    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+    parts: list[str] = []
+    for name, url in items:
+        path = base / name
+        if not path.exists():
+            continue
+        if path.suffix.lower() == ".svg":
+            svg = re.sub(r"<\?xml[^>]*\?>", "", path.read_text(encoding="utf-8"), count=1).strip()
+            svg = svg.replace("<svg ", '<svg style="height:54px;width:auto;" ', 1)
+            inner = svg
+        else:
+            uri = "data:" + mime.get(path.suffix.lower(), "image/png") + ";base64,"
+            uri += base64.b64encode(path.read_bytes()).decode()
+            inner = f'<img src="{uri}" style="max-height:54px;max-width:180px;width:auto;">'
+        parts.append(
+            f'<a href="{url}" target="_blank" rel="noopener" '
+            f'style="display:inline-flex;align-items:center;height:54px;margin:0 16px;">'
+            f"{inner}</a>"
+        )
+    if parts:
+        st.html(
+            '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;">'
+            + "".join(parts)
+            + "</div>"
+        )
+
 # Hero Section
 st.markdown("""
 <div style="text-align: center; padding: 3rem 1rem 2rem;">
@@ -117,13 +171,18 @@ st.latex(r'\text{AEW} = \frac{\sum_{i}^{j} \text{Intensity}_i \times \text{Wavel
 
 st.markdown("---")
 
-# Footer
+# Footer: logo strip + funding disclaimer
 st.markdown("""
 <div style="text-align: center; margin-top: 2rem;">
     <p style="color: #6b7280; font-size: 0.85rem;">FluoroSense — Fluorescence Spectroscopy Analysis Platform</p>
-    <p style="color: #6b7280; font-size: 0.8rem;">
-        <a href="https://www.tuwien.at/tch/icebe/ibdgroup" style="color: #00d4ff;">IBD Group TU Wien</a> |
-        <a href="https://github.com/floriangisperg" style="color: #00d4ff;">GitHub</a>
-    </p>
 </div>
 """, unsafe_allow_html=True)
+
+_render_credit_logos()
+st.caption(
+    "A tool of the CD Laboratory for [Inclusion Body Processing 4.0](%s), "
+    "developed in the [IBD Group — Integrated Bioprocess Development](%s) "
+    "at [TU Wien](%s). Funded by the "
+    "[Christian Doppler Gesellschaft](%s) and [Boehringer Ingelheim](%s)."
+    % (CDLAB_URL, IBD_URL, TUWIEN_URL, CDG_URL, BI_URL)
+)
