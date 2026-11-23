@@ -29,13 +29,12 @@ TUWIEN_URL = "https://www.tuwien.at/en/"
 def _render_credit_logos() -> None:
     """Clickable logo strip shown in the page footer.
 
-    Every logo — including the Boehringer Ingelheim SVG — is embedded as a
-    base64 data-URI ``<img>`` tag. LysoSense inlines the SVG markup because a
-    data-URI ``<img>`` can be blocked by the component iframe's CSP; ``st.html``
-    injects into the main page DOM (no iframe), so that workaround is
-    unnecessary here. Inlining the raw ``<svg>`` also collapses to zero width
-    as a flex item (viewBox-only SVGs have no intrinsic size), which is why it
-    rendered with no space at all.
+    Every logo is embedded as a base64 data-URI ``<img>`` tag. The Boehringer
+    Ingelheim logo is a PNG raster of its SVG (``assets/bi_logo_white.png``,
+    white fill for the dark theme, rasterized via headless Chrome): SVG did
+    not survive rendering in Streamlit's ``st.html`` context reliably — the
+    raw ``<svg>`` collapsed to zero width as a flex item and the SVG data-URI
+    ``<img>`` never displayed — while raster ``<img>`` tags work everywhere.
     """
     import base64
 
@@ -43,16 +42,10 @@ def _render_credit_logos() -> None:
     items = [
         ("ibd_logo.png", IBD_URL),
         ("tuwien_logo.webp", TUWIEN_URL),
-        ("bi_logo.svg", BI_URL),
+        ("bi_logo_white.png", BI_URL),
         ("cdg_logo.png", CDG_URL),
     ]
-    mime = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-        ".svg": "image/svg+xml",
-    }
+    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
     parts: list[str] = []
     for name, url in items:
         path = base / name
