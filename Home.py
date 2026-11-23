@@ -29,13 +29,15 @@ TUWIEN_URL = "https://www.tuwien.at/en/"
 def _render_credit_logos() -> None:
     """Clickable logo strip shown in the page footer.
 
-    Raster logos (PNG/JPG/WebP) are embedded as base64 data-URI ``<img>`` tags.
-    The Boehringer Ingelheim logo is an SVG and is inlined directly: SVGs
-    loaded via data-URI ``<img>`` tags can be blocked by content-security
-    policies, whereas inlined ``<svg>`` markup renders reliably.
+    Every logo — including the Boehringer Ingelheim SVG — is embedded as a
+    base64 data-URI ``<img>`` tag. LysoSense inlines the SVG markup because a
+    data-URI ``<img>`` can be blocked by the component iframe's CSP; ``st.html``
+    injects into the main page DOM (no iframe), so that workaround is
+    unnecessary here. Inlining the raw ``<svg>`` also collapses to zero width
+    as a flex item (viewBox-only SVGs have no intrinsic size), which is why it
+    rendered with no space at all.
     """
     import base64
-    import re
 
     base = Path(__file__).parent / "assets"
     items = [
@@ -44,28 +46,28 @@ def _render_credit_logos() -> None:
         ("bi_logo.svg", BI_URL),
         ("cdg_logo.png", CDG_URL),
     ]
-    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+    mime = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".svg": "image/svg+xml",
+    }
     parts: list[str] = []
     for name, url in items:
         path = base / name
         if not path.exists():
             continue
-        if path.suffix.lower() == ".svg":
-            svg = re.sub(r"<\?xml[^>]*\?>", "", path.read_text(encoding="utf-8"), count=1).strip()
-            svg = svg.replace("<svg ", '<svg style="height:54px;width:auto;" ', 1)
-            inner = svg
-        else:
-            uri = "data:" + mime.get(path.suffix.lower(), "image/png") + ";base64,"
-            uri += base64.b64encode(path.read_bytes()).decode()
-            inner = f'<img src="{uri}" style="max-height:54px;max-width:180px;width:auto;">'
+        uri = "data:" + mime.get(path.suffix.lower(), "image/png") + ";base64,"
+        uri += base64.b64encode(path.read_bytes()).decode()
         parts.append(
             f'<a href="{url}" target="_blank" rel="noopener" '
             f'style="display:inline-flex;align-items:center;height:54px;margin:0 16px;">'
-            f"{inner}</a>"
+            f'<img src="{uri}" style="max-height:54px;max-width:180px;width:auto;"></a>'
         )
     if parts:
         st.html(
-            '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;">'
+            '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;">'
             + "".join(parts)
             + "</div>"
         )
