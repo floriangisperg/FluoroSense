@@ -1,7 +1,7 @@
 # FluoroSense
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://fluorosense.streamlit.app/)
-![Python](https://img.shields.io/badge/Python-3.8%20|%203.9%20|%203.10%20|%203.11-blue)
+![Python](https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13-blue)
 ![Status](https://img.shields.io/badge/status-active-success)
 
 A Streamlit-based web application for analyzing fluorescence spectroscopy data from Jasco spectrofluorometer instruments. Designed for protein kinetics research, specifically monitoring protein folding and unfolding through intrinsic tryptophan and tyrosine fluorescence.
@@ -55,22 +55,22 @@ $$\text{AEW} = \frac{\sum_{i}^{j} \text{Intensity}_i \times \text{Wavelength}_i}
 
 ```bash
 # Clone the repository
-git clone https://github.com/floriangisperg/fluorosense.git
-cd fluorosense
+git clone https://github.com/floriangisperg/FluoroSense.git
+cd FluoroSense
 
 # Install dependencies
 uv sync
 
 # Run the application
-uv run streamlit run Main_Page.py
+uv run streamlit run Home.py
 ```
 
 ### Using pip
 
 ```bash
 # Clone the repository
-git clone https://github.com/floriangisperg/fluorosense.git
-cd fluorosense
+git clone https://github.com/floriangisperg/FluoroSense.git
+cd FluoroSense
 
 # Create virtual environment
 python -m venv .venv
@@ -80,7 +80,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # Run the application
-streamlit run Main_Page.py
+streamlit run Home.py
 ```
 
 ---
@@ -101,19 +101,35 @@ streamlit run Main_Page.py
 
 ## Data Format
 
-FluoroSense expects Jasco spectrofluorometer CSV files with the standard format:
+FluoroSense understands three input formats:
+
+**1. Jasco single-spectrum export** — header fields, an `XYDATA` section of `wavelength,intensity` rows (no column header), and an `##### Extended Information` footer:
 
 ```
 TITLE,Sample Name,
 ...header fields...
 XYDATA
-Wavelength,Intensity
-300,150.5
-301,152.3
+300.0000,46.0996
+301.0000,152.3
 ...
 ##### Extended Information
 ...metadata...
 ```
+
+**2. Jasco multi-column time-series export** — same wrapper, but `XYDATA` begins with a header row of process times (minutes) and one intensity column per timepoint:
+
+```
+XYDATA
+,0,2.56667,5.15,...
+300.0000,448.33,451.2,449.9,...
+300.5000,452.10,455.0,453.7,...
+...
+##### Extended Information
+```
+
+**3. FluoroSense exports** — files previously processed and downloaded from FluoroSense itself (`.txt`, `.csv`, `.xlsx`) can be re-uploaded to either module.
+
+Incomplete/ragged wavelength rows are dropped with a visible warning so all spectra share one wavelength grid.
 
 ---
 
@@ -128,6 +144,15 @@ Wavelength,Intensity
 
 ---
 
+## Development & Testing
+
+```bash
+pip install pytest
+python -m pytest tests/ -q
+```
+
+---
+
 ## Citation
 
 If you use FluoroSense in your research, please cite:
@@ -138,9 +163,15 @@ If you use FluoroSense in your research, please cite:
   title = {FluoroSense: A Streamlit Application for Fluorescence Spectroscopy Analysis},
   year = {2024},
   publisher = {GitHub},
-  url = {https://github.com/floriangisperg/fluorosense}
+  url = {https://github.com/floriangisperg/FluoroSense}
 }
 ```
+
+---
+
+## License
+
+FluoroSense is released into the public domain under the [Unlicense](LICENSE).
 
 ---
 

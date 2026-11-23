@@ -76,14 +76,13 @@ yarn-error.log*
 *.swp
 *.swo
 
-# Ignore Markdown files except README.md and CITATION
+# Ignore Markdown files except project docs
 *.md
 !README.md
-!CITATION.cff
+!agents.md
+!CLAUDE.md
 
-# AI Assistant files
-agents.md
-claude.md
+# AI assistant local files
 .claude/
 
 # Dev containers
