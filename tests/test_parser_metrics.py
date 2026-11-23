@@ -19,10 +19,19 @@ from fluorosense.metrics import (
 )
 
 
-REPRODUCE_DIR = Path(__file__).resolve().parents[1] / "data" / "reproduce_bug"
+# Regression fixtures are committed with the repo so these tests genuinely run
+# on a fresh clone (previously they lived in gitignored data/ and the tests
+# passed vacuously when the directory was absent).
+REPRODUCE_DIR = Path(__file__).resolve().parent / "fixtures" / "reproduce_bug"
+REPRODUCE_FILES = sorted(REPRODUCE_DIR.glob("*.csv"))
+skip_without_fixtures = unittest.skipUnless(
+    REPRODUCE_FILES,
+    "Regression fixture CSVs missing from tests/fixtures/reproduce_bug/",
+)
 
 
 class JascoParserTests(unittest.TestCase):
+    @skip_without_fixtures
     def test_reproduce_files_drop_ragged_final_row_and_warn(self):
         for path in sorted(REPRODUCE_DIR.glob("*.csv")):
             with self.subTest(path=path.name):
@@ -36,6 +45,7 @@ class JascoParserTests(unittest.TestCase):
                 self.assertIn("Range 300-363.5 nm; expected 300-450 nm.", result.warnings)
                 self.assertEqual(result.warnings, parse_warnings(result.data))
 
+    @skip_without_fixtures
     def test_time_series_metrics_are_numeric_for_reproduce_files(self):
         for path in sorted(REPRODUCE_DIR.glob("*.csv")):
             with self.subTest(path=path.name):
